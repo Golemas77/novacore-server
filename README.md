@@ -1,7 +1,7 @@
 # NovaCore: serverio šaltinio kodas
 
 **NovaCore** yra nepelno entuziastų lietuviškas „World of Warcraft“ (Ličo Karaliaus rūstybė, 3.3.5a) serveris.
-Svetainė: <https://novacore-site.vercel.app/> · Discord: <https://discord.gg/Ht3tMwaG3>
+Svetainė: <https://novacore-site.vercel.app/> · Discord: <https://discord.gg/5jkgRskPgj>
 
 Šioje saugykloje yra **mūsų pakeitimai ir mūsų sukurti moduliai**. Serveris paremtas
 [AzerothCore](https://www.azerothcore.org/) su „Playerbots“ šaka, todėl visas darbas skelbiamas pagal tą pačią
