@@ -1,0 +1,331 @@
+diff --git a/conf/playerbots.conf.dist b/conf/playerbots.conf.dist
+index 7419a97b..047b4651 100644
+--- a/conf/playerbots.conf.dist
++++ b/conf/playerbots.conf.dist
+@@ -1874,6 +1874,24 @@ AiPlayerbot.RandomBotEmote = 0
+ AiPlayerbot.RandomBotSuggestDungeons = 1
+ # Bots greet players when invited
+ AiPlayerbot.EnableGreet = 0
++# NovaCore: ar botai raso pasisveikinimus / atsisveikinimus savininkui ("Hello", "Hi!", "Hello, I follow you!", "Goodbye!")
++# 1 = rasyti (numatyta), 0 = tyleti. Komandu atsakymu (stats, quests ir pan.) tai neliecia.
++AiPlayerbot.EnableGreetWhispers = 1
++# NovaCore: sistemos pranesimai zaidejui kiekviena karta prisijungus ("This server runs with mod-playerbots ...",
++# "bot initialization at server startup takes about X minutes"). 1 = rodyti (numatyta), 0 = nerodyti.
++# Dėmesio: AGPLv3 reikalauja pasiulyti zaidejams pakeisto serverio saltini (pvz. nuoroda svetaineje).
++AiPlayerbot.LoginNotices = 1
++
++# NovaCore: random botai perka daiktus is aukciono (ekipiruotes pagerinimai ir profesiju medziagos / receptai pagal boto AI)
++# Ijungti / isjungti
++AiPlayerbot.AuctionShopping = 1
++# Kas kiek sekundziu (nuo-iki) vienas botas gali apsipirkti
++AiPlayerbot.AuctionShoppingIntervalMin = 600
++AiPlayerbot.AuctionShoppingIntervalMax = 1200
++# Kiek % savo aukso bot gali isleisti vienam pirkiniui
++AiPlayerbot.AuctionShoppingMoneyPercent = 40
++# Kas kiek sekundziu perskaitomas aukciono vaizdas (boto pasirinkimui)
++AiPlayerbot.AuctionShoppingRefreshSeconds = 120
+ # Chance to reply to toxic links with toxic links (0-100)
+ AiPlayerbot.ToxicLinksRepliesChance = 30
+ # Chance to reply to Thunderfury with Thunderfury (0-100)
+diff --git a/src/PlayerbotAI.cpp b/src/PlayerbotAI.cpp
+index 5dbe5cb9..81d9d2bc 100644
+--- a/src/PlayerbotAI.cpp
++++ b/src/PlayerbotAI.cpp
+@@ -2735,8 +2735,18 @@ bool PlayerbotAI::TellMasterNoFacing(std::ostringstream& stream, PlayerbotSecuri
+     return TellMasterNoFacing(stream.str(), securityLevel);
+ }
+ 
++// NovaCore: standartiniai pasisveikinimai / atsisveikinimai (pagal tikslu teksta), kuriuos botai siuncia savininkui kartu su zodzio
++// "pranesimu" - juos galima isjungti nustatymu AiPlayerbot.EnableGreetWhispers = 0 (kitu, komandu atsakymu, neliecia).
++static bool IsGreetingWhisper(std::string const& text)
++{
++    return text == "Hello" || text == "Hello!" || text == "Hi!" || text == "Hello, I follow you!" || text == "Goodbye!";
++}
++
+ bool PlayerbotAI::TellMasterNoFacing(std::string const text, PlayerbotSecurityLevel securityLevel)
+ {
++    if (!sPlayerbotAIConfig->enableGreetWhispers && IsGreetingWhisper(text))
++        return false;
++
+     Player* master = GetMaster();
+     PlayerbotAI* masterBotAI = nullptr;
+     if (master)
+@@ -4421,7 +4431,13 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
+         for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+         {
+             Player* member = gref->GetSource();
+-            if ((!member || !member->IsInWorld()) && member->GetMapId() != bot->GetMapId())
++            // NovaCore: cia buvo „&&“ vietoj „||“. Del to narys, kurio nera
++            // pasaulyje (pvz. kaip tik teleportuojasi), pro patikra praeidavo
++            // ir toliau buvo naudojamas - o jo PlayerbotAI jau nebegalioja.
++            // Taip pat „&&“ atveju member->GetMapId() buvo kvieciamas net kai
++            // member == nullptr. Serveris griudavo PlayerbotAI::AllowActivity.
++            if (!member || !member->IsInWorld() || member->IsBeingTeleported() ||
++                member->GetMapId() != bot->GetMapId())
+             {
+                 continue;
+             }
+diff --git a/src/PlayerbotAIConfig.cpp b/src/PlayerbotAIConfig.cpp
+index 6c6aa322..58d6a82b 100644
+--- a/src/PlayerbotAIConfig.cpp
++++ b/src/PlayerbotAIConfig.cpp
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include "PlayerbotAIConfig.h"
++#include <algorithm>
+ #include <iostream>
+ #include "Config.h"
+ #include "NewRpgInfo.h"
+@@ -510,6 +511,13 @@ bool PlayerbotAIConfig::Initialize()
+ 
+     // SPP switches
+     enableGreet = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableGreet", true);
++    enableGreetWhispers = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableGreetWhispers", true);
++    loginNotices = sConfigMgr->GetOption<bool>("AiPlayerbot.LoginNotices", true);   // NovaCore
++    auctionShopping = sConfigMgr->GetOption<bool>("AiPlayerbot.AuctionShopping", true);
++    auctionShoppingIntervalMin = sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionShoppingIntervalMin", 600);
++    auctionShoppingIntervalMax = std::max<uint32>(auctionShoppingIntervalMin, sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionShoppingIntervalMax", 1200));
++    auctionShoppingMoneyPercent = std::clamp<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionShoppingMoneyPercent", 40), 1, 100);
++    auctionShoppingRefreshSeconds = std::max<uint32>(30, sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionShoppingRefreshSeconds", 120));
+     summonWhenGroup = sConfigMgr->GetOption<bool>("AiPlayerbot.SummonWhenGroup", true);
+     randomBotFixedLevel = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotFixedLevel", false);
+     disableRandomLevels = sConfigMgr->GetOption<bool>("AiPlayerbot.DisableRandomLevels", false);
+diff --git a/src/PlayerbotAIConfig.h b/src/PlayerbotAIConfig.h
+index a9a12fba..9ca95ec1 100644
+--- a/src/PlayerbotAIConfig.h
++++ b/src/PlayerbotAIConfig.h
+@@ -133,6 +133,16 @@ public:
+     bool randomBotSuggestDungeons;
+     bool enableBroadcasts;
+     bool enableGreet;
++    // NovaCore: pasisveikinimu / atsisveikinimu SUSIRASINEJIMAS su savininku ("Hello", "Hi!", "Hello, I follow you!", "Goodbye!")
++    bool enableGreetWhispers;
++    // NovaCore: sistemos pranesimai zaidejui prisijungiant ("This server runs with mod-playerbots", botu paleidimo trukme)
++    bool loginNotices;
++    // NovaCore: botai perka daiktus is aukciono (zr. PlayerbotAuctionMgr.h)
++    bool auctionShopping;
++    uint32 auctionShoppingIntervalMin;     // s
++    uint32 auctionShoppingIntervalMax;     // s
++    uint32 auctionShoppingMoneyPercent;    // kiek % savo aukso bot gali isleisti vienam pirkiniui
++    uint32 auctionShoppingRefreshSeconds;  // kas kiek sekundziu perskaitomas aukciono vaizdas
+     bool randomBotSayWithoutMaster;
+ 
+     uint32 broadcastChanceMaxValue;
+diff --git a/src/Playerbots.cpp b/src/Playerbots.cpp
+index ed44a70f..a77026df 100644
+--- a/src/Playerbots.cpp
++++ b/src/Playerbots.cpp
+@@ -15,6 +15,7 @@
+  * with this program. If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
++#include "PlayerbotAuctionMgr.h"
+ #include "Playerbots.h"
+ 
+ #include "Channel.h"
+@@ -101,14 +102,17 @@ public:
+             // especially if you are distributing a repack or hosting a public server
+             // e.g. you can replace the URL with your own repository,
+             // but it should be publicly accessible and include all modifications you've made
+-            if (sPlayerbotAIConfig->enabled)
++            // NovaCore: abu pranesimus galima isjungti per AiPlayerbot.LoginNotices = 0 (zr. playerbots.conf).
++            // Isjungus pranesimus AGPLv3 isipareigojimas lieka: lankytojams reikia siulyti prieiga prie pakeistu saltiniu
++            // kitu budu (pvz. nuoroda svetaineje).
++            if (sPlayerbotAIConfig->loginNotices && sPlayerbotAIConfig->enabled)
+             {
+                 ChatHandler(player->GetSession()).SendSysMessage(
+                     "|cff00ff00This server runs with |cff00ccffmod-playerbots|r "
+                     "|cffcccccchttps://github.com/liyunfan1223/mod-playerbots|r");
+             }
+ 
+-            if (sPlayerbotAIConfig->enabled || sPlayerbotAIConfig->randomBotAutologin)
++            if (sPlayerbotAIConfig->loginNotices && (sPlayerbotAIConfig->enabled || sPlayerbotAIConfig->randomBotAutologin))
+             {
+                 std::string roundedTime =
+                     std::to_string(std::ceil((sPlayerbotAIConfig->maxRandomBots * 0.11 / 60) * 10) / 10.0);
+@@ -441,6 +445,7 @@ void AddPlayerbotsScripts()
+     new PlayerbotsServerScript();
+     new PlayerbotsWorldScript();
+     new PlayerbotsScript();
++    AddPlayerbotAuctionScripts();   // NovaCore
+     new PlayerBotsBGScript();
+ 
+     AddSC_playerbots_commandscript();
+diff --git a/src/RandomPlayerbotMgr.cpp b/src/RandomPlayerbotMgr.cpp
+index 1b69d7f3..78d8cc09 100644
+--- a/src/RandomPlayerbotMgr.cpp
++++ b/src/RandomPlayerbotMgr.cpp
+@@ -3055,6 +3055,20 @@ void RandomPlayerbotMgr::PrintStats()
+     for (PlayerBotMap::iterator i = playerBots.begin(); i != playerBots.end(); ++i)
+     {
+         Player* bot = i->second;
++
++        // NovaCore: GET_PLAYERBOT_AI(bot) gali grazinti nullptr (botas dar
++        // neinicializuotas arba jau isjungiamas). Toliau cikle botAI
++        // naudojamas daugybeje vietu be jokios patikros, todel serveris
++        // griudavo statistikos skaiciavimo metu (PlayerbotAI::AllowActivity,
++        // this == nullptr). Toki bota praleidziam is karto - kitaip jis i
++        // vienas lenteles patektu, o i kitas ne.
++        if (!bot)
++            continue;
++
++        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
++        if (!botAI)
++            continue;
++
+         if (IsAlliance(bot->getRace()))
+             ++alliance[bot->GetLevel()];
+         else
+@@ -3067,7 +3081,6 @@ void RandomPlayerbotMgr::PrintStats()
+         lvlPerClass[bot->getClass()] += bot->GetLevel();
+         lvlPerRace[bot->getRace()] += bot->GetLevel();
+ 
+-        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+         if (botAI->AllowActivity())
+             ++active;
+ 
+diff --git a/src/strategy/actions/WorldPacketActionContext.h b/src/strategy/actions/WorldPacketActionContext.h
+index 0df4bd06..394e6c21 100644
+--- a/src/strategy/actions/WorldPacketActionContext.h
++++ b/src/strategy/actions/WorldPacketActionContext.h
+@@ -19,6 +19,7 @@
+ #include "GuildCreateActions.h"
+ #include "InventoryChangeFailureAction.h"
+ #include "LeaveGroupAction.h"
++#include "AuctionShoppingAction.h"
+ #include "LfgActions.h"
+ #include "LootAction.h"
+ #include "LootRollAction.h"
+@@ -108,6 +109,7 @@ public:
+         creators["lfg role check"] = &WorldPacketActionContext::lfg_role_check;
+         creators["lfg leave"] = &WorldPacketActionContext::lfg_leave;
+         creators["lfg teleport"] = &WorldPacketActionContext::lfg_teleport;
++        creators["ah shopping"] = &WorldPacketActionContext::ah_shopping;
+         creators["see spell"] = &WorldPacketActionContext::see_spell;
+         creators["arena team accept"] = &WorldPacketActionContext::arena_team_accept;
+     }
+@@ -169,6 +171,7 @@ private:
+     static Action* arena_tactics(PlayerbotAI* botAI) { return new ArenaTactics(botAI); }
+     static Action* petition_sign(PlayerbotAI* botAI) { return new PetitionSignAction(botAI); }
+     static Action* lfg_teleport(PlayerbotAI* botAI) { return new LfgTeleportAction(botAI); }
++    static Action* ah_shopping(PlayerbotAI* botAI) { return new AuctionShoppingAction(botAI); }
+     static Action* lfg_leave(PlayerbotAI* botAI) { return new LfgLeaveAction(botAI); }
+     static Action* lfg_accept(PlayerbotAI* botAI) { return new LfgAcceptAction(botAI); }
+     static Action* lfg_role_check(PlayerbotAI* botAI) { return new LfgRoleCheckAction(botAI); }
+diff --git a/src/strategy/generic/WorldPacketHandlerStrategy.cpp b/src/strategy/generic/WorldPacketHandlerStrategy.cpp
+index 90d9f64c..997057d8 100644
+--- a/src/strategy/generic/WorldPacketHandlerStrategy.cpp
++++ b/src/strategy/generic/WorldPacketHandlerStrategy.cpp
+@@ -50,6 +50,8 @@ void WorldPacketHandlerStrategy::InitTriggers(std::vector<TriggerNode*>& trigger
+     triggers.push_back(new TriggerNode("petition offer", NextAction::array(0, new NextAction("petition sign", relevance), nullptr)));
+     triggers.push_back(new TriggerNode("lfg proposal", NextAction::array(0, new NextAction("lfg accept", relevance), nullptr)));
+     triggers.push_back(new TriggerNode("lfg proposal active", NextAction::array(0, new NextAction("lfg accept", relevance), nullptr)));
++    triggers.push_back(new TriggerNode("lfg teleport pending", NextAction::array(0, new NextAction("lfg teleport", relevance), nullptr)));  // NovaCore
++    triggers.push_back(new TriggerNode("ah shopping", NextAction::array(0, new NextAction("ah shopping", relevance), nullptr)));  // NovaCore
+     triggers.push_back(new TriggerNode("arena team invite", NextAction::array(0, new NextAction("arena team accept", relevance), nullptr)));
+     //triggers.push_back(new TriggerNode("no non bot players around", NextAction::array(0, new NextAction("delay", relevance), nullptr)));
+     triggers.push_back(new TriggerNode("bg status", NextAction::array(0, new NextAction("bg status", relevance), nullptr)));
+diff --git a/src/strategy/triggers/LfgTriggers.cpp b/src/strategy/triggers/LfgTriggers.cpp
+index aa170e2b..4b23b38c 100644
+--- a/src/strategy/triggers/LfgTriggers.cpp
++++ b/src/strategy/triggers/LfgTriggers.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include "LfgTriggers.h"
+ 
++#include "LFGMgr.h"
+ #include "Playerbots.h"
+ 
+ bool LfgProposalActiveTrigger::IsActive() { return AI_VALUE(uint32, "lfg proposal"); }
+@@ -14,3 +15,40 @@ bool UnknownDungeonTrigger::IsActive()
+     return botAI->HasActivePlayerMaster() && botAI->GetMaster() && botAI->GetMaster()->IsInWorld() &&
+            botAI->GetMaster()->GetMap()->IsDungeon() && bot->GetMapId() == botAI->GetMaster()->GetMapId();
+ }
++
++// NovaCore: zr. LfgTriggers.h
++bool LfgTeleportPendingTrigger::IsActive()
++{
++    Group* group = bot->GetGroup();
++    if (!group || !group->isLFGGroup())
++        return false;
++
++    if (sLFGMgr->GetState(group->GetGUID()) != lfg::LFG_STATE_DUNGEON)
++        return false;
++
++    lfg::LFGDungeonData const* dungeon = sLFGMgr->GetLFGDungeon(sLFGMgr->GetDungeon(group->GetGUID()));
++    if (!dungeon)
++        return false;
++
++    // jau pozemyje, miršta, kovoja, krenta ar teleportuojasi - dabar nieko nedarom (bandys vėliau)
++    if (bot->GetMapId() == dungeon->map || !bot->IsAlive() || bot->IsInCombat() || bot->IsBeingTeleported() || bot->IsFalling())
++        return false;
++
++    // teleportuojamasi tik kai tikras zaidejas jau yra pozemyje (jis paspaude "Eiti i pozemi")
++    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
++    {
++        Player* member = ref->GetSource();
++        if (!member || member == bot || !member->IsInWorld() || member->GetMapId() != dungeon->map)
++            continue;
++
++        PlayerbotAI* memberAI = GET_PLAYERBOT_AI(member);
++        if (!memberAI || memberAI->IsRealPlayer())
++        {
++            LOG_INFO("playerbots", "Bot {} <{}>: LFG pakartotinis teleportas i pozemi (zemelapis {})", bot->GetGUID().ToString().c_str(),
++                     bot->GetName().c_str(), dungeon->map);
++            return true;
++        }
++    }
++
++    return false;
++}
+diff --git a/src/strategy/triggers/LfgTriggers.h b/src/strategy/triggers/LfgTriggers.h
+index 1c493b18..28e48179 100644
+--- a/src/strategy/triggers/LfgTriggers.h
++++ b/src/strategy/triggers/LfgTriggers.h
+@@ -26,4 +26,15 @@ public:
+     bool IsActive() override;
+ };
+ 
++// NovaCore: botai i LFG pozemi teleportuodavosi TIK pakartodami zaidejo CMSG_LFG_TELEPORT (viena karta). Jei tuo metu botas
++// kovojo / krito / dar neturejo "master" ar serveris atmete teleporta, jis lik davo lauke be jokio pakartojimo.
++// Si aktyvuojasi, kai zaidejas jau yra pozemyje, o botas (tos pacios LFG grupes narys) dar ne: kas ~3 s kartoja teleporta.
++class LfgTeleportPendingTrigger : public Trigger
++{
++public:
++    LfgTeleportPendingTrigger(PlayerbotAI* botAI) : Trigger(botAI, "lfg teleport pending", 3) {}
++
++    bool IsActive() override;
++};
++
+ #endif
+diff --git a/src/strategy/triggers/TriggerContext.h b/src/strategy/triggers/TriggerContext.h
+index 984c1dea..341f47b7 100644
+--- a/src/strategy/triggers/TriggerContext.h
++++ b/src/strategy/triggers/TriggerContext.h
+@@ -9,6 +9,7 @@
+ #include "CureTriggers.h"
+ #include "GenericTriggers.h"
+ #include "GuildTriggers.h"
++#include "AuctionShoppingTrigger.h"
+ #include "LfgTriggers.h"
+ #include "LootTriggers.h"
+ #include "NamedObjectContext.h"
+@@ -149,6 +150,8 @@ public:
+         creators["medium group heal setting"] = &TriggerContext::medium_group_heal_occasion;
+         creators["invalid target"] = &TriggerContext::invalid_target;
+         creators["lfg proposal active"] = &TriggerContext::lfg_proposal_active;
++        creators["lfg teleport pending"] = &TriggerContext::lfg_teleport_pending;
++        creators["ah shopping"] = &TriggerContext::ah_shopping;
+ 
+         creators["unknown dungeon"] = &TriggerContext::unknown_dungeon;
+ 
+@@ -245,6 +248,8 @@ private:
+     static Trigger* has_rpg_target(PlayerbotAI* botAI) { return new HasRpgTargetTrigger(botAI); }
+     static Trigger* collision(PlayerbotAI* botAI) { return new CollisionTrigger(botAI); }
+     static Trigger* lfg_proposal_active(PlayerbotAI* botAI) { return new LfgProposalActiveTrigger(botAI); }
++    static Trigger* lfg_teleport_pending(PlayerbotAI* botAI) { return new LfgTeleportPendingTrigger(botAI); }
++    static Trigger* ah_shopping(PlayerbotAI* botAI) { return new AuctionShoppingTrigger(botAI); }
+     static Trigger* unknown_dungeon(PlayerbotAI* botAI) { return new UnknownDungeonTrigger(botAI); }
+     static Trigger* invalid_target(PlayerbotAI* botAI) { return new InvalidTargetTrigger(botAI); }
+     static Trigger* critical_aoe_heal(PlayerbotAI* botAI)

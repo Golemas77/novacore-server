@@ -1,0 +1,218 @@
+#
+# NovaCore: mod-hardcore nustatymai
+#
+# Hardkoro režimas: žaidėjas savanoriškai pasirenka .hardcore start. Kol režimas aktyvus, mirtis jį
+# panaikina (personažas neištrinamas, žaidėjas toliau žaidžia kaip įprastas).
+#
+
+########################################
+# mod-hardcore
+########################################
+#
+#    Hardcore.Enable
+#        Description: Įjungia / išjungia visą modulį.
+#        Default:     1 - (Įjungta)
+#                     0 - (Išjungta)
+#
+
+Hardcore.Enable = 1
+
+#
+#    Hardcore.MaxLevelToStart
+#        Description: Iki kokio lygio (imtinai) galima pradėti hardkoro režimą.
+#        Default:     1 - (tik ką sukurtas personažas)
+#
+
+Hardcore.MaxLevelToStart = 1
+
+#
+#    Hardcore.RequireZeroXp
+#        Description: Ar hardkorą galima pradėti tik kol personažas dar negavo jokios patirties (nors 1 XP užkerta kelią).
+#        Default:     1
+#
+
+Hardcore.RequireZeroXp = 1
+
+#
+#    Hardcore.AllowRestartAfterDeath
+#        Description: Ar žuvęs žaidėjas gali pradėti hardkorą iš naujo.
+#        Default:     0 - (Ne, žuvus režimas nebegrįžta)
+#                     1 - (Taip)
+#
+
+Hardcore.AllowRestartAfterDeath = 0
+
+#
+#    Hardcore.RequireConfirmation
+#        Description: Ar .hardcore start reikalauja patvirtinimo (.hardcore start taip).
+#        Default:     1
+#
+
+Hardcore.RequireConfirmation = 1
+
+#
+#    Hardcore.AnnounceStart
+#        Description: Skelbti visam serveriui, kai žaidėjas pradeda hardkorą.
+#        Default:     1
+#
+
+Hardcore.AnnounceStart = 1
+
+#
+#    Hardcore.AnnounceDeath
+#        Description: Skelbti visam serveriui, kai hardkoro žaidėjas žūsta.
+#        Default:     1
+#
+
+Hardcore.AnnounceDeath = 1
+
+#
+#    Hardcore.AnnounceMilestoneEvery
+#        Description: Kas kiek lygių skelbti hardkoro žaidėjo pasiekimą (0 - neskelbti).
+#        Default:     10
+#
+
+Hardcore.AnnounceMilestoneEvery = 10
+
+#
+#    Hardcore.LoginHint
+#        Description: Prisijungus žemo lygio žaidėjams, kurie dar gali pradėti hardkorą, parodyti užuominą.
+#        Default:     1
+#
+
+Hardcore.LoginHint = 1
+
+#
+#    Hardcore.BlockGroups
+#        Description: Hardkoro režime negalima būti grupėje su kitais žaidėjais.
+#        Default:     1
+#
+
+Hardcore.BlockGroups = 1
+
+#
+#    Hardcore.AllowBotGroups
+#        Description: Ar hardkoro žaidėjas gali būti grupėje su botais (playerbots).
+#        Default:     0 - (Ne, botai taip pat laikomi „kitais žaidėjais“)
+#                     1 - (Taip)
+#
+
+Hardcore.AllowBotGroups = 0
+
+#
+#    Hardcore.BlockPvP
+#        Description: Hardkoro žaidėjas negali įsijungti PvP, pulti kitų žaidėjų ar dvikovoti.
+#        Default:     1
+#
+
+Hardcore.BlockPvP = 1
+
+#
+#    Hardcore.BlockBattlegrounds
+#        Description: Hardkoro žaidėjas negali eiti į mūšio laukus ir areną.
+#        Default:     1
+#
+
+Hardcore.BlockBattlegrounds = 1
+
+#
+#    Hardcore.BlockDungeons
+#        Description: Hardkoro žaidėjas negali eiti į požemius (instancijas) ir reidus.
+#        Default:     1
+#
+
+Hardcore.BlockDungeons = 1
+
+#
+#    Hardcore.XpRate
+#        Description: Hardkoro žaidėjo patirties taškų reitas (nepriklausomai nuo serverio Rate.XP.*,
+#                     kuris pašalinamas, o vietoj jo taikomas šis).
+#        Default:     1
+#
+
+Hardcore.XpRate = 1
+
+#
+#    Hardcore.EnemyHealthMultiplier
+#        Description: Priešų gyvybių daugiklis hardkoro žaidėjui (įgyvendinta mažinant jam daromą žalą priešams).
+#        Default:     1.5
+#
+
+Hardcore.EnemyHealthMultiplier = 1.5
+
+#
+#    Hardcore.EnemyDamageMultiplier
+#        Description: Priešų daromos žalos hardkoro žaidėjui (ir jo augintiniams) daugiklis.
+#        Default:     1.5
+#
+
+Hardcore.EnemyDamageMultiplier = 1.5
+
+#
+#    Hardcore.BlockAuctionHouse
+#        Description: Hardkoro žaidėjas negali naudotis aukcionu.
+#        Default:     1
+#
+
+Hardcore.BlockAuctionHouse = 1
+
+#
+#    Hardcore.Reward.Enable
+#        Description: Apdovanojimas hardkoro žaidėjui, pasiekusiam maksimalų lygį GYVAM: pasiekimas, titulas ir jojamasis gyvūnas.
+#        Default:     1
+#
+
+Hardcore.Reward.Enable = 1
+
+#
+#    Hardcore.Reward.Achievement
+#        Description: Pasiekimo ID (Achievement.dbc / achievement_dbc). 9001 = „Viena gyvybė, 80 lygis“ (titulą suteikia per achievement_reward).
+#        Default:     9001
+#
+
+Hardcore.Reward.Achievement = 9001
+
+#
+#    Hardcore.Reward.Title
+#        Description: Titulo ID (CharTitles.dbc / chartitles_dbc). 178 = „Nepalaužiamasis“. Išduodamas ir tiesiogiai, jei pasiekimas jo neišdavė.
+#        Default:     178
+#
+
+Hardcore.Reward.Title = 178
+
+#
+#    Hardcore.Reward.MountSpell
+#        Description: Jojamojo gyvūno burto ID, kurį išmoksta apdovanotas žaidėjas. 60002 = Laike pasiklydęs protodrakonas
+#                     (kiti: 59961 raudonasis, 59996 mėlynasis, 59976 juodasis protodrakonas). 0 = neišduoti.
+#        Default:     60002
+#
+
+Hardcore.Reward.MountSpell = 60002
+
+#
+#    Hardcore.EndAtMaxLevel
+#        Description: Pasiekus maksimalų lygį gyvam hardkoro režimas baigiamas: apribojimai (grupės, požemiai, aukcionas ir pan.) nuimami,
+#                     aura dingsta, apdovanojimai lieka.
+#        Default:     1 - (Baigiamas)
+#                     0 - (Lieka aktyvus; apdovanojimas išduodamas vieną kartą)
+#
+
+Hardcore.EndAtMaxLevel = 1
+
+#
+#    Hardcore.AnnounceComplete
+#        Description: Visam serveriui paskelbti, kai žaidėjas įveikia hardkorą (pasiekia maksimalų lygį gyvas).
+#        Default:     1
+#
+
+Hardcore.AnnounceComplete = 1
+
+#
+#    Hardcore.AnnounceSound
+#        Description: Garsas (SoundEntries.dbc ID), grojamas VISIEMS prisijungusiems žaidėjams, kai kas nors įveikia hardkorą.
+#                     Pranešimas rodomas ekrano viršuje (kaip „Raid Warning“, su kliento garsu), šis garsas groja papildomai.
+#        Default:     12891 - (pasiekimo garsas „AchievementSound“)
+#                     (888 - lygio kėlimo garsas; 8959 - raid warning; 8455 - Aljanso pergalės fanfaros; 8454 - Ordos; 0 - be papildomo garso)
+#
+
+Hardcore.AnnounceSound = 12891

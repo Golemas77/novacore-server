@@ -1,0 +1,51 @@
+#
+# NovaCore: mod-transmog nustatymai
+#
+# Transmogrifikacija (daikto išvaizdos keitimas) kaip Retail: pas NPC „Išvaizdos meistrė“ pagrindiniuose miestuose žaidėjas
+# pakeičia daikto matomą išvaizdą į bet kurią savo paskyros kolekcijoje esančią tos pačios rūšies daikto išvaizdą.
+#
+
+########################################
+# mod-transmog
+########################################
+#
+#    Transmog.Enable
+#        Description: Įjungia / išjungia visą modulį.
+#        Default:     1 - (Įjungta)
+#                     0 - (Išjungta)
+#
+
+Transmog.Enable = 1
+
+#
+#    Transmog.CostCopper
+#        Description: Kaina (variu) už vieno lizdo išvaizdos pakeitimą. 0 - nemokama. Pašalinti visada nemokama.
+#        Default:     100000 (10 auksinių)
+#
+
+Transmog.CostCopper = 100000
+
+#
+#    Transmog.MinQuality
+#        Description: Mažiausia daikto kokybė, kurio išvaizdą galima atrakinti (0 pilkas, 1 baltas, 2 žalias, 3 mėlynas ...).
+#        Default:     1
+#
+
+Transmog.MinQuality = 1
+
+#
+#    Transmog.PageSize
+#        Description: Kiek išvaizdų rodoma viename NPC meniu puslapyje (4-20).
+#        Default:     12
+#
+
+Transmog.PageSize = 12
+
+#
+#    Transmog.AnnounceUnlock
+#        Description: Ar pranešti pokalbyje apie naujai atrakintą išvaizdą.
+#        Default:     1 - (Taip)
+#                     0 - (Ne)
+#
+
+Transmog.AnnounceUnlock = 1

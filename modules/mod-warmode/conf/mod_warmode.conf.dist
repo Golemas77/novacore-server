@@ -1,0 +1,43 @@
+#
+# NovaCore: mod-warmode nustatymai
+#
+# Karo režimas (kaip Retail) PvE serveriui: žaidėjas jį įjungia pagrindiniuose miestuose (.warmode on arba pas NPC
+# „Karo vadas“). Įjungus: +X% patirties už priešus ir užduotis, visada PvP žymė, kova tik su kitais karo režimo žaidėjais.
+#
+
+########################################
+# mod-warmode
+########################################
+#
+#    WarMode.Enable
+#        Description: Įjungia / išjungia visą modulį.
+#        Default:     1 - (Įjungta)
+#                     0 - (Išjungta)
+#
+
+WarMode.Enable = 1
+
+#
+#    WarMode.XpBonusPercent
+#        Description: Kiek procentų daugiau patirties gauna karo režimo žaidėjas (už priešus ir užduotis).
+#        Default:     20
+#
+
+WarMode.XpBonusPercent = 20
+
+#
+#    WarMode.OnlyInCapitals
+#        Description: Karo režimą galima įjungti ir išjungti tik pagrindiniuose miestuose (ir ne kovoje).
+#        Default:     1
+#
+
+WarMode.OnlyInCapitals = 1
+
+#
+#    WarMode.BlockNonWarModePvP
+#        Description: Žaidėjų tarpusavio žala leidžiama TIK kai abu karo režime (ar dvikova / mūšio laukas / arena /
+#                     Wintergrasp / FFA zona). Žaidėjai be karo režimo (ir hardkoro) pulti negalima.
+#        Default:     1
+#
+
+WarMode.BlockNonWarModePvP = 1

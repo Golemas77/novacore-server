@@ -1,0 +1,147 @@
+diff --git a/src/server/game/Globals/ObjectMgr.cpp b/src/server/game/Globals/ObjectMgr.cpp
+index d6cecdc5d..382dbf282 100644
+--- a/src/server/game/Globals/ObjectMgr.cpp
++++ b/src/server/game/Globals/ObjectMgr.cpp
+@@ -8907,7 +8907,14 @@ std::string const* ObjectMgr::GetModuleString(std::string module, uint32 id, Loc
+ 
+     LOG_ERROR("sql.sql", "Module string module {} id {} not found in DB.", module, id);
+ 
+-    return (std::string*)"error";
++    // NovaCore: cia buvo `return (std::string*)"error";` - paprastas C eiluciu
++    // literalas, priverstinai paverstas i std::string*. Tai NE std::string
++    // objektas, todel bet koks kreipimasis (pvz. ChatHandler kvieciamas
++    // ->c_str()) skaito std::string vidinius laukus is atsitiktiniu baitu ir
++    // serveris griuva. Grazinam tikra statine eilute - trukstamas vertimas
++    // dabar tik matomas tekste, o ne numusa serveri.
++    static std::string const notFound = "<truksta modulio eilutes>";
++    return &notFound;
+ }
+ 
+ bool ObjectMgr::LoadAcoreStrings()
+diff --git a/src/server/game/Texts/CreatureTextMgr.cpp b/src/server/game/Texts/CreatureTextMgr.cpp
+index c471c7815..488d0a3e2 100644
+--- a/src/server/game/Texts/CreatureTextMgr.cpp
++++ b/src/server/game/Texts/CreatureTextMgr.cpp
+@@ -25,6 +25,49 @@
+ #include "MiscPackets.h"
+ #include "ObjectMgr.h"
+ 
++// NovaCore: sprendzia `$g vyr:mot;` (ir `$G ...;`) zymes pagal gavejo lyti. Lietuviskas klientas siu zymu NPC kalbose
++// nesprende (rode "Isveskite $g jį:ją; ..."), todel jas issprendziam patys. Tarpai aplink variantus nukerpami.
++// `$n`, `$r`, `$c` ir kitos zymes paliekamos klientui.
++static std::string ResolveGenderTokens(std::string text, uint8 gender)
++{
++    auto trim = [](std::string const& s)
++    {
++        std::size_t b = s.find_first_not_of(" \t");
++        if (b == std::string::npos)
++            return std::string();
++        std::size_t e = s.find_last_not_of(" \t");
++        return s.substr(b, e - b + 1);
++    };
++
++    std::size_t pos = 0;
++    while ((pos = text.find('$', pos)) != std::string::npos)
++    {
++        if (pos + 1 >= text.size() || (text[pos + 1] != 'g' && text[pos + 1] != 'G'))
++        {
++            ++pos;
++            continue;
++        }
++
++        std::size_t const colon = text.find(':', pos + 2);
++        std::size_t const semicolon = text.find(';', pos + 2);
++        std::size_t const nextDollar = text.find('$', pos + 2);
++        if (colon == std::string::npos || semicolon == std::string::npos || colon > semicolon ||
++            (nextDollar != std::string::npos && nextDollar < semicolon))
++        {
++            ++pos;
++            continue;
++        }
++
++        std::string const male = trim(text.substr(pos + 2, colon - pos - 2));
++        std::string const female = trim(text.substr(colon + 1, semicolon - colon - 1));
++        std::string const& pick = (gender == GENDER_FEMALE) ? female : male;
++        text.replace(pos, semicolon - pos + 1, pick);
++        pos += pick.size();
++    }
++
++    return text;
++}
++
+ class CreatureTextBuilder
+ {
+ public:
+@@ -33,7 +76,9 @@ public:
+ 
+     std::size_t operator()(WorldPacket* data, LocaleConstant locale) const
+     {
+-        std::string const& text = sCreatureTextMgr->GetLocalizedChatString(_source->GetEntry(), _gender, _textGroup, _textId, locale);
++        std::string text = sCreatureTextMgr->GetLocalizedChatString(_source->GetEntry(), _gender, _textGroup, _textId, locale);
++        if (g_creatureTextRecipientGender != 255)
++            text = ResolveGenderTokens(std::move(text), g_creatureTextRecipientGender);
+ 
+         return ChatHandler::BuildChatPacket(*data, _msgType, Language(_language), _source, _target, text, 0, "", locale);
+     }
+@@ -56,7 +101,9 @@ public:
+ 
+     std::size_t operator()(WorldPacket* data, LocaleConstant locale) const
+     {
+-        std::string const& text = sCreatureTextMgr->GetLocalizedChatString(_source->GetEntry(), _gender, _textGroup, _textId, locale);
++        std::string text = sCreatureTextMgr->GetLocalizedChatString(_source->GetEntry(), _gender, _textGroup, _textId, locale);
++        if (g_creatureTextRecipientGender != 255)
++            text = ResolveGenderTokens(std::move(text), g_creatureTextRecipientGender);
+ 
+         return ChatHandler::BuildChatPacket(*data, _msgType, Language(_language), _talker, _target, text, 0, "", locale);
+     }
+diff --git a/src/server/game/Texts/CreatureTextMgr.h b/src/server/game/Texts/CreatureTextMgr.h
+index d84d91c8d..407df1eaa 100644
+--- a/src/server/game/Texts/CreatureTextMgr.h
++++ b/src/server/game/Texts/CreatureTextMgr.h
+@@ -118,13 +118,17 @@ private:
+ 
+ #define sCreatureTextMgr CreatureTextMgr::instance()
+ 
++// NovaCore: gavejo lytis serverio puses `$g vyr:mot;` zymu sprendimui (zr. CreatureTextMgr.cpp). 255 = nesprendti.
++// Nustatoma tik kol vykdomas builderis, todel kiti GetLocalizedChatString kvietejai nepaveikiami.
++inline thread_local uint8 g_creatureTextRecipientGender = 255;
++
+ template<class Builder>
+ class CreatureTextLocalizer
+ {
+ public:
+     CreatureTextLocalizer(Builder const& builder, ChatMsg msgType) : _builder(builder), _msgType(msgType)
+     {
+-        _packetCache.resize(TOTAL_LOCALES, nullptr);
++        _packetCache.resize(TOTAL_LOCALES * 2, nullptr);    // NovaCore: kalba x lytis
+     }
+ 
+     ~CreatureTextLocalizer()
+@@ -143,17 +147,23 @@ public:
+         WorldPacket* messageTemplate;
+         std::size_t whisperGUIDpos;
+ 
++        // NovaCore: paketas kesuojamas pagal kalba IR gavejo lyti (kad `$g vyr:mot;` butu issprestas serveryje)
++        uint8 const gender = player->getGender() == GENDER_FEMALE ? GENDER_FEMALE : GENDER_MALE;
++        std::size_t const cacheIdx = std::size_t(loc_idx) * 2 + gender;
++
+         // create if not cached yet
+-        if (!_packetCache[loc_idx])
++        if (!_packetCache[cacheIdx])
+         {
+             messageTemplate = new WorldPacket();
++            g_creatureTextRecipientGender = gender;
+             whisperGUIDpos = _builder(messageTemplate, loc_idx);
+-            _packetCache[loc_idx] = new std::pair<WorldPacket*, std::size_t>(messageTemplate, whisperGUIDpos);
++            g_creatureTextRecipientGender = 255;
++            _packetCache[cacheIdx] = new std::pair<WorldPacket*, std::size_t>(messageTemplate, whisperGUIDpos);
+         }
+         else
+         {
+-            messageTemplate = _packetCache[loc_idx]->first;
+-            whisperGUIDpos = _packetCache[loc_idx]->second;
++            messageTemplate = _packetCache[cacheIdx]->first;
++            whisperGUIDpos = _packetCache[cacheIdx]->second;
+         }
+ 
+         WorldPacket data(*messageTemplate);

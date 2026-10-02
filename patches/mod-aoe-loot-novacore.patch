@@ -1,0 +1,61 @@
+diff --git a/src/aoe_loot.cpp b/src/aoe_loot.cpp
+index af949b2..1ce9989 100644
+--- a/src/aoe_loot.cpp
++++ b/src/aoe_loot.cpp
+@@ -211,6 +211,19 @@ namespace
+             HasSimpleRegularLootRules(item);
+     }
+ 
++    // NovaCore: asmeninis grobis (mod-personal-loot) - paties zaidejo asmeniniai daiktai (rollWinnerGUID = jis) renkami
++    // is visu lavonu kaip ir paprasti; KITU zaideju asmeniniu daiktu niekada nelieciam.
++    bool IsOwnPersonalLoot(LootItem const& item, Player const* player)
++    {
++        return player &&
++            item.rollWinnerGUID == player->GetGUID() &&
++            !item.is_looted &&
++            !item.freeforall &&
++            !item.needs_quest &&
++            !item.is_blocked &&
++            item.conditions.empty();
++    }
++
+     void CompactTransferredRegularLoot(Loot* loot)
+     {
+         if (!loot ||
+@@ -273,7 +286,8 @@ void AOELootPlayer::OnPlayerLogin(Player* player)
+             ChatHandler(session).PSendModuleSysMessage(MODULE_STRING, AOE_LOGIN_MESSAGE);
+ }
+ 
+-bool AOELootServer::CanPacketReceive(WorldSession* session, WorldPacket const& packet)
++// NovaCore: parasas suderintas su sios sakos ServerScript baze (WorldPacket&).
++bool AOELootServer::CanPacketReceive(WorldSession* session, WorldPacket& packet)
+ {
+     // Only handle loot packets
+     if (packet.GetOpcode() != CMSG_LOOT)
+@@ -403,7 +417,8 @@ bool AOELootServer::CanPacketReceive(WorldSession* session, WorldPacket const& p
+         {
+             LootItem const& item = loot->items[i];
+ 
+-            if (!CanSafelySortLootItem(item))
++            // NovaCore: + paties zaidejo asmeniniai daiktai
++            if (!CanSafelySortLootItem(item) && !IsOwnPersonalLoot(item, player))
+                 continue;
+ 
+             regularCandidates.push_back(
+diff --git a/src/aoe_loot.h b/src/aoe_loot.h
+index 2243a58..0f1e703 100644
+--- a/src/aoe_loot.h
++++ b/src/aoe_loot.h
+@@ -63,7 +63,11 @@ class AOELootServer : public ServerScript
+ public:
+     AOELootServer() : ServerScript("AOELootServer", { SERVERHOOK_CAN_PACKET_RECEIVE }) {}
+ 
+-    bool CanPacketReceive(WorldSession* session, WorldPacket const& packet) override;
++    // NovaCore: sioje AzerothCore sakoje (liyunfan1223 Playerbot) bazine
++    // ServerScript::CanPacketReceive deklaruota su NE-const WorldPacket&,
++    // todel su „const“ metodas nieko neperrasydavo (klaida C3668).
++    // Funkcija paketo nekeicia - ji dirba su kopija (zr. aoe_loot.cpp).
++    bool CanPacketReceive(WorldSession* session, WorldPacket& packet) override;
+ 
+ private:
+     // Helper function - Check if loot is valid

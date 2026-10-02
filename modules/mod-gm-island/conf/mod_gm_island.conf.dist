@@ -1,0 +1,30 @@
+[worldserver]
+
+###################################################################################################
+# NovaCore: mod-gm-island - GM testų sala (map 1, GM Island)
+###################################################################################################
+
+#
+#    GmIsland.Enable
+#        Description: Įjungia GM salos apsaugą ir komandą `.testsala`.
+#        Default:     1
+#
+
+GmIsland.Enable = 1
+
+#
+#    GmIsland.AllowGroupWithGM
+#        Description: Salon gali patekti ir ne GM žaidėjai (pvz. botai), jei grupėje yra GM paskyra.
+#        Default:     1
+#                     0 - tik GM paskyros (security >= GAMEMASTER)
+#
+
+GmIsland.AllowGroupWithGM = 1
+
+#
+#    GmIsland.Gold
+#        Description: Kiek aukso pagalbininkas duoda vienu paspaudimu (iki maksimumo).
+#        Default:     200000
+#
+
+GmIsland.Gold = 200000

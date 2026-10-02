@@ -1,0 +1,90 @@
+#
+# NovaCore: mod-personal-loot nustatymai
+#
+# Asmeninis grobis kaip Retail: nukovus sutveri grupe, kiekvienam teisę turinčiam nariui ATSKIRAI išridenama grobio lentelė ir
+# laimėjimai išduodami tiesiai į jo kuprinę. Nebelieka "Need/Greed" ginčų ir grobio vagysčių: kas iškrito tau – tavo.
+#
+
+########################################
+# mod-personal-loot
+########################################
+#
+#    PersonalLoot.Enable
+#        Description: Įjungia / išjungia visą modulį.
+#        Default:     1 - (Įjungta)
+#                     0 - (Išjungta)
+#
+
+PersonalLoot.Enable = 1
+
+#
+#    PersonalLoot.Scope
+#        Description: Kur veikia asmeninis grobis.
+#        Default:     1 - visur, kur grupė žudo sutvėrimus
+#                     0 - tik požemiuose ir reiduose (instancijose)
+#
+
+PersonalLoot.Scope = 1
+
+#
+#    PersonalLoot.MinPlayers
+#        Description: Mažiausias TIKRŲ žaidėjų (ne botų) skaičius, esančių pakankamai arti grobio, kad įsijungtų asmeninis grobis.
+#                     1 – asmeninis grobis ir vienam su botais (grupėje turi būti bent vienas tikras žaidėjas). 2 – vienam su botais grobis lieka standartinis.
+#        Default:     1
+#
+
+PersonalLoot.MinPlayers = 1
+
+#
+#    PersonalLoot.IncludeBots
+#        Description: Ar grupės botai (playerbots) irgi gauna savo asmeninį grobį.
+#        Default:     1 - (Gauna)
+#                     0 - (Negauna; tada grobio gauna tik tikri žaidėjai)
+#
+
+PersonalLoot.IncludeBots = 1
+
+#
+#    PersonalLoot.RespectMasterLoot
+#        Description: Jei grupės grobio režimas Master Looter – asmeninis grobis NEnaudojamas (vadovas pats dalija).
+#        Default:     1
+#
+
+PersonalLoot.RespectMasterLoot = 1
+
+#
+#    PersonalLoot.BroadcastMinQuality
+#        Description: Nuo kokios kokybės grupei rodoma "X gauna grobį: [daiktas]" (0 pilka, 1 balta, 2 žalia, 3 mėlyna, 4 violetinė).
+#                     Savo gautus daiktus žaidėjas mato visada.
+#        Default:     3
+#
+
+PersonalLoot.BroadcastMinQuality = 3
+
+#
+#    PersonalLoot.SellGreyWhenFull
+#        Description: Jei kuprinė pilna, pilki (menkos kokybės) daiktai parduodami už auksą; kiti daiktai siunčiami paštu.
+#        Default:     1
+#
+
+PersonalLoot.SellGreyWhenFull = 1
+
+#
+#    PersonalLoot.Announce
+#        Description: Vieną kartą grupei parodo pranešimą, kad naudojamas asmeninis grobis.
+#        Default:     1
+#
+
+PersonalLoot.Announce = 1
+
+#
+#    PersonalLoot.AutoDeliver
+#        Description: Kaip gaunamas asmeninis grobis.
+#        Default:     0 - daiktai lieka lavone: kiekvienas žaidėjas mato ir pasiima TIK SAVO daiktus (kaip grobio lange). Paėmus
+#                         daiktą visa grupė mato pranešimą, todėl galima susitarti dėl apsikeitimo (BoP daiktai 2 val. perduodami).
+#                         Botai ir pertekliniai daiktai (nesutelpa į grobio langą) vis tiek keliauja tiesiai į kuprinę.
+#                     1 - visi daiktai iškart keliauja į kuprinę, aukso dalis išduodama iš karto.
+#                     Grupėse su "Round Robin" grobio režimu naudojamas automatinis išdavimas.
+#
+
+PersonalLoot.AutoDeliver = 0
