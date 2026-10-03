@@ -1,3 +1,184 @@
+diff --git a/src/server/game/Achievements/AchievementMgr.cpp b/src/server/game/Achievements/AchievementMgr.cpp
+index f96775eb4..3f327101b 100644
+--- a/src/server/game/Achievements/AchievementMgr.cpp
++++ b/src/server/game/Achievements/AchievementMgr.cpp
+@@ -2268,7 +2268,7 @@ void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
+     if (_player->IsGameMaster())
+     {
+         LOG_INFO("achievement", "Not available in GM mode.");
+-        ChatHandler(_player->GetSession()).PSendSysMessage("Not available in GM mode");
++        ChatHandler(_player->GetSession()).PSendSysMessage("Nepasiekiama GM režime");
+         return;
+     }
+ 
+diff --git a/src/server/game/ArenaSpectator/ArenaSpectator.cpp b/src/server/game/ArenaSpectator/ArenaSpectator.cpp
+index e1f0c7602..10bb948a1 100644
+--- a/src/server/game/ArenaSpectator/ArenaSpectator.cpp
++++ b/src/server/game/ArenaSpectator/ArenaSpectator.cpp
+@@ -38,39 +38,39 @@ bool ArenaSpectator::HandleSpectatorSpectateCommand(ChatHandler* handler, std::s
+             HandleSpectatorWatchCommand(handler, name);
+             return true;
+         }
+-        handler->PSendSysMessage("You are already spectacting arena.");
++        handler->PSendSysMessage("Jau stebi areną.");
+         return true;
+     }
+ 
+     if (player->IsClass(CLASS_DEATH_KNIGHT, CLASS_CONTEXT_TELEPORT) && player->GetMapId() == MAP_EBON_HOLD)
+     {
+-        handler->PSendSysMessage("Death Knights can't spectate before finishing questline.");
++        handler->PSendSysMessage("Mirties riteriai negali stebėti, kol nebaigė užduočių grandinės.");
+         return true;
+     }
+ 
+     Player* spectate = ObjectAccessor::FindPlayerByName(name);
+     if (!spectate)
+     {
+-        handler->SendSysMessage("Requested player not found.");
++        handler->SendSysMessage("Prašomas žaidėjas nerastas.");
+         return true;
+     }
+ 
+     if (spectate->IsSpectator())
+     {
+-        handler->SendSysMessage("Requested player is a spectator.");
++        handler->SendSysMessage("Prašomas žaidėjas yra stebėtojas.");
+         return true;
+     }
+ 
+     if (!spectate->FindMap() || !spectate->FindMap()->IsBattleArena())
+     {
+-        handler->SendSysMessage("Requested player is not in arena.");
++        handler->SendSysMessage("Prašomas žaidėjas nėra arenoje.");
+         return true;
+     }
+ 
+     BattlegroundMap* bgmap = ((BattlegroundMap*)spectate->FindMap());
+     if (!bgmap->GetBG() || bgmap->GetBG()->GetStatus() == STATUS_WAIT_LEAVE)
+     {
+-        handler->SendSysMessage("This arena battle has finished.");
++        handler->SendSysMessage("Ši arenos kova jau baigėsi.");
+         return true;
+     }
+ 
+@@ -147,14 +147,14 @@ bool ArenaSpectator::HandleSpectatorSpectateCommand(ChatHandler* handler, std::s
+             (handler->GetSession()->GetSecurity() && bgmap->GetBG()->GetStatus() != STATUS_WAIT_JOIN && bgmap->GetBG()->GetStatus() != STATUS_IN_PROGRESS))
+     {
+         bgPreparation = true;
+-        handler->SendSysMessage("Arena is not in progress yet. You will be invited as soon as it starts.");
++        handler->SendSysMessage("Arena dar nevyksta. Būsi pakviestas, kai tik ji prasidės.");
+         bgmap->GetBG()->AddToBeTeleported(player->GetGUID(), spectate->GetGUID());
+         player->SetPendingSpectatorInviteInstanceId(spectate->GetBattlegroundId());
+     }
+ 
+     if (!errors.empty())
+     {
+-        handler->PSendSysMessage("To spectate, please fix the following:");
++        handler->PSendSysMessage("Norėdamas stebėti, ištaisyk šiuos dalykus:");
+         for (std::list<std::string>::const_iterator itr = errors.begin(); itr != errors.end(); ++itr)
+             handler->PSendSysMessage("- {}", (*itr));
+ 
+diff --git a/src/server/game/Battlegrounds/Battleground.cpp b/src/server/game/Battlegrounds/Battleground.cpp
+index 7ddd4e87e..b1efdd2b2 100644
+--- a/src/server/game/Battlegrounds/Battleground.cpp
++++ b/src/server/game/Battlegrounds/Battleground.cpp
+@@ -1348,7 +1348,7 @@ void Battleground::ReadyMarkerClicked(Player* p)
+     readyMarkerClickedSet.insert(p->GetGUID());
+     uint32 count = readyMarkerClickedSet.size();
+     uint32 req = ArenaTeam::GetReqPlayersForType(GetArenaType());
+-    ChatHandler(p->GetSession()).SendNotification("You are marked as ready {}/{}", count, req);
++    ChatHandler(p->GetSession()).SendNotification("Esi pažymėtas kaip pasiruošęs {}/{}", count, req);
+     if (count == req)
+     {
+         m_Events |= BG_STARTING_EVENT_2;
+diff --git a/src/server/game/Battlegrounds/Zones/BattlegroundAB.cpp b/src/server/game/Battlegrounds/Zones/BattlegroundAB.cpp
+index 10c0956e5..d7133eff1 100644
+--- a/src/server/game/Battlegrounds/Zones/BattlegroundAB.cpp
++++ b/src/server/game/Battlegrounds/Zones/BattlegroundAB.cpp
+@@ -194,13 +194,13 @@ void BattlegroundAB::HandleAreaTrigger(Player* player, uint32 trigger)
+     {
+         case 3948:                                          // Arathi Basin Alliance Exit.
+             if (player->GetTeamId() != TEAM_ALLIANCE)
+-                player->GetSession()->SendAreaTriggerMessage("Only The Alliance can use that portal");
++                player->GetSession()->SendAreaTriggerMessage("Tuo portalu gali naudotis tik Aljansas");
+             else
+                 player->LeaveBattleground();
+             break;
+         case 3949:                                          // Arathi Basin Horde Exit.
+             if (player->GetTeamId() != TEAM_HORDE)
+-                player->GetSession()->SendAreaTriggerMessage("Only The Horde can use that portal");
++                player->GetSession()->SendAreaTriggerMessage("Tuo portalu gali naudotis tik Orda");
+             else
+                 player->LeaveBattleground();
+             break;
+diff --git a/src/server/game/Battlegrounds/Zones/BattlegroundAV.cpp b/src/server/game/Battlegrounds/Zones/BattlegroundAV.cpp
+index 5b6a8b335..589899635 100644
+--- a/src/server/game/Battlegrounds/Zones/BattlegroundAV.cpp
++++ b/src/server/game/Battlegrounds/Zones/BattlegroundAV.cpp
+@@ -585,13 +585,13 @@ void BattlegroundAV::HandleAreaTrigger(Player* player, uint32 trigger)
+         case 95:
+         case 2608:
+             if (player->GetTeamId() != TEAM_ALLIANCE)
+-                player->GetSession()->SendAreaTriggerMessage("Only The Alliance can use that portal");
++                player->GetSession()->SendAreaTriggerMessage("Tuo portalu gali naudotis tik Aljansas");
+             else
+                 player->LeaveBattleground();
+             break;
+         case 2606:
+             if (player->GetTeamId() != TEAM_HORDE)
+-                player->GetSession()->SendAreaTriggerMessage("Only The Horde can use that portal");
++                player->GetSession()->SendAreaTriggerMessage("Tuo portalu gali naudotis tik Orda");
+             else
+                 player->LeaveBattleground();
+             break;
+diff --git a/src/server/game/Chat/Channels/Channel.cpp b/src/server/game/Chat/Channels/Channel.cpp
+index b07223030..8adc24a0d 100644
+--- a/src/server/game/Chat/Channels/Channel.cpp
++++ b/src/server/game/Chat/Channels/Channel.cpp
+@@ -361,7 +361,7 @@ void Channel::KickOrBan(Player const* player, std::string const& badname, bool b
+                     }
+                     else
+                     {
+-                        ChatHandler(player->GetSession()).PSendSysMessage("Character {} has other faction!", badname);
++                        ChatHandler(player->GetSession()).PSendSysMessage("Veikėjas {} yra kitos frakcijos!", badname);
+                         return;
+                     }
+                 }
+diff --git a/src/server/game/Entities/Player/Player.cpp b/src/server/game/Entities/Player/Player.cpp
+index 21b2a8e02..b659e4735 100644
+--- a/src/server/game/Entities/Player/Player.cpp
++++ b/src/server/game/Entities/Player/Player.cpp
+@@ -6275,7 +6275,7 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, int32 honor, bool awar
+             int32 count = sWorld->getIntConfig(CONFIG_PVP_TOKEN_COUNT);
+ 
+             if (AddItem(itemID, count))
+-                ChatHandler(GetSession()).PSendSysMessage("You have been awarded a token for slaying another player.");
++                ChatHandler(GetSession()).PSendSysMessage("Gavai žetoną už kito žaidėjo nužudymą.");
+         }
+     }
+ 
+@@ -15546,7 +15546,7 @@ bool Player::AddItem(uint32 itemId, uint32 count)
+     if (count == 0 || dest.empty())
+     {
+         // -- TODO: Send to mailbox if no space
+-        ChatHandler(GetSession()).PSendSysMessage("You don't have any space in your bags.");
++        ChatHandler(GetSession()).PSendSysMessage("Neturi vietos savo kuprinėse.");
+         return false;
+     }
+ 
+diff --git a/src/server/game/Entities/Unit/Unit.cpp b/src/server/game/Entities/Unit/Unit.cpp
+index 131663680..dccdcf925 100644
+--- a/src/server/game/Entities/Unit/Unit.cpp
++++ b/src/server/game/Entities/Unit/Unit.cpp
+@@ -6791,7 +6791,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
+ 
+                             target = this;
+                             if (roll_chance_i(10))
+-                                ToPlayer()->Say("This is Madness!", LANG_UNIVERSAL); /// @todo: It should be moved to database, shouldn't it?
++                                ToPlayer()->Say("Tai beprotybė!", LANG_UNIVERSAL); /// @todo: It should be moved to database, shouldn't it?
+                             break;
+                         }
+                     // Sunwell Exalted Caster Neck (??? neck)
 diff --git a/src/server/game/Globals/ObjectMgr.cpp b/src/server/game/Globals/ObjectMgr.cpp
 index d6cecdc5d..382dbf282 100644
 --- a/src/server/game/Globals/ObjectMgr.cpp
@@ -18,6 +199,50 @@ index d6cecdc5d..382dbf282 100644
  }
  
  bool ObjectMgr::LoadAcoreStrings()
+diff --git a/src/server/game/Guilds/Guild.cpp b/src/server/game/Guilds/Guild.cpp
+index 9c9b81d41..ade23e5c5 100644
+--- a/src/server/game/Guilds/Guild.cpp
++++ b/src/server/game/Guilds/Guild.cpp
+@@ -1476,7 +1476,7 @@ void Guild::HandleInviteMember(WorldSession* session, std::string const& name)
+     uint32 memberLimit = sWorld->getIntConfig(CONFIG_GUILD_MEMBER_LIMIT);
+     if (memberLimit > 0 && player->GetGuild()->GetMemberCount() >= memberLimit)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("Your guild has reached the maximum amount of members ({}). You cannot send another invite until the guild member count is lower.", memberLimit);
++        ChatHandler(player->GetSession()).PSendSysMessage("Tavo gildija pasiekė didžiausią narių skaičių ({}). Negali siųsti naujų kvietimų, kol narių skaičius nesumažės.", memberLimit);
+         SendCommandResult(session, GUILD_COMMAND_INVITE, ERR_GUILD_INTERNAL, name);
+         return;
+     }
+diff --git a/src/server/game/Handlers/MiscHandler.cpp b/src/server/game/Handlers/MiscHandler.cpp
+index 942eae9c5..d8f3fc1e0 100644
+--- a/src/server/game/Handlers/MiscHandler.cpp
++++ b/src/server/game/Handlers/MiscHandler.cpp
+@@ -1365,11 +1365,11 @@ void WorldSession::HandleSetRaidDifficultyOpcode(WorldPacket& recv_data)
+                 switch (group->GetDifficultyChangePreventionReason())
+                 {
+                     case DIFFICULTY_PREVENTION_CHANGE_BOSS_KILLED:
+-                        ChatHandler(this).PSendSysMessage("Raid was in combat recently and may not change difficulty again for {} sec.", preventionTime);
++                        ChatHandler(this).PSendSysMessage("Reidas neseniai kovojo ir sunkumo lygio dar negali keisti {} sek.", preventionTime);
+                         break;
+                     case DIFFICULTY_PREVENTION_CHANGE_RECENTLY_CHANGED:
+                     default:
+-                        ChatHandler(this).PSendSysMessage("Raid difficulty has changed recently, and may not change again for {} sec.", preventionTime);
++                        ChatHandler(this).PSendSysMessage("Reido sunkumo lygis neseniai pasikeitė ir negali būti keičiamas dar {} sek.", preventionTime);
+                         break;
+                 }
+ 
+diff --git a/src/server/game/Handlers/MovementHandler.cpp b/src/server/game/Handlers/MovementHandler.cpp
+index 77b5bb43b..86b23966e 100644
+--- a/src/server/game/Handlers/MovementHandler.cpp
++++ b/src/server/game/Handlers/MovementHandler.cpp
+@@ -841,7 +841,7 @@ void WorldSession::HandleSummonResponseOpcode(WorldPacket& recvData)
+         if (Player* summoner = ObjectAccessor::FindPlayer(summoner_guid))
+             ArenaSpectator::HandleSpectatorSpectateCommand(&chc, summoner->GetName().c_str());
+         else
+-            chc.PSendSysMessage("Requested player not found.");
++            chc.PSendSysMessage("Prašomas žaidėjas nerastas.");
+ 
+         agree = false;
+     }
 diff --git a/src/server/game/Texts/CreatureTextMgr.cpp b/src/server/game/Texts/CreatureTextMgr.cpp
 index c471c7815..488d0a3e2 100644
 --- a/src/server/game/Texts/CreatureTextMgr.cpp
@@ -145,3 +370,362 @@ index d84d91c8d..407df1eaa 100644
          }
  
          WorldPacket data(*messageTemplate);
+diff --git a/src/server/scripts/EasternKingdoms/ZulGurub/boss_renataki.cpp b/src/server/scripts/EasternKingdoms/ZulGurub/boss_renataki.cpp
+index 4e18dfe06..41036b246 100644
+--- a/src/server/scripts/EasternKingdoms/ZulGurub/boss_renataki.cpp
++++ b/src/server/scripts/EasternKingdoms/ZulGurub/boss_renataki.cpp
+@@ -70,7 +70,7 @@ public:
+         {
+             if (!_enraged && HealthBelowPct(30))
+             {
+-                me->TextEmote("%s becomes enraged", me, false);
++                me->TextEmote("%s įsiunta", me, false);
+                 DoCast(me, SPELL_ENRAGE);
+                 _enraged = true;
+             }
+diff --git a/src/server/scripts/Events/brewfest.cpp b/src/server/scripts/Events/brewfest.cpp
+index e0b01c49f..01c69cd39 100644
+--- a/src/server/scripts/Events/brewfest.cpp
++++ b/src/server/scripts/Events/brewfest.cpp
+@@ -419,16 +419,16 @@ struct npc_dark_iron_attack_generator : public ScriptedAI
+                     if (thrown == 3)
+                     {
+                         thrown = 0;
+-                        sayer->Say("SOMEONE TRY THIS SUPER BREW!", LANG_UNIVERSAL);
++                        sayer->Say("KAS NORS PASIBANDYKIT ŠĮ SUPERALŲ!", LANG_UNIVERSAL);
+                         //sayer->CastSpell(sayer, SPELL_CREATE_SUPER_BREW, true);
+                         sayer->SummonCreature(NPC_SUPER_BREW_TRIGGER, sayer->GetPositionX() + 15 * cos(sayer->GetOrientation()), sayer->GetPositionY() + 15 * std::sin(sayer->GetOrientation()), sayer->GetPositionZ(), 0.0f, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 30000);
+                     }
+                     else
+                     {
+                         if (urand(0, 1))
+-                            sayer->Say("Chug and chuck! Chug and chuck!", LANG_UNIVERSAL);
++                            sayer->Say("Gerk ir mėtyk! Gerk ir mėtyk!", LANG_UNIVERSAL);
+                         else
+-                            sayer->Say("Down the free brew and pelt the Guzzlers with your mug!", LANG_UNIVERSAL);
++                            sayer->Say("Išgerk nemokamą alų ir apmėtyk Gurkšnotojus savo puodeliu!", LANG_UNIVERSAL);
+                     }
+ 
+                     break;
+@@ -708,19 +708,19 @@ struct npc_dark_iron_guzzler : public ScriptedAI
+             switch (urand(0, 4))
+             {
+                 case 0:
+-                    me->Say("Drink it all boys!", LANG_UNIVERSAL);
++                    me->Say("Gerkit viską, vyrai!", LANG_UNIVERSAL);
+                     break;
+                 case 1:
+-                    me->Say("DRINK! BRAWL! DRINK! BRAWL!", LANG_UNIVERSAL);
++                    me->Say("GERK! MUŠKIS! GERK! MUŠKIS!", LANG_UNIVERSAL);
+                     break;
+                 case 2:
+-                    me->Say("Did someone say, \"Free Brew\"?", LANG_UNIVERSAL);
++                    me->Say("Ar kas nors pasakė „Nemokamas alus“?", LANG_UNIVERSAL);
+                     break;
+                 case 3:
+-                    me->Say("No one expects the Dark Iron dwarves!", LANG_UNIVERSAL);
++                    me->Say("Niekas nesitiki Tamsiosios Geležies nykštukų!", LANG_UNIVERSAL);
+                     break;
+                 case 4:
+-                    me->Say("It's not a party without some crashers!", LANG_UNIVERSAL);
++                    me->Say("Be nekviestų svečių vakarėlis neįvyksta!", LANG_UNIVERSAL);
+                     break;
+             }
+         }
+diff --git a/src/server/scripts/Northrend/CrusadersColiseum/TrialOfTheChampion/boss_black_knight.cpp b/src/server/scripts/Northrend/CrusadersColiseum/TrialOfTheChampion/boss_black_knight.cpp
+index 47b89b162..988c30e96 100644
+--- a/src/server/scripts/Northrend/CrusadersColiseum/TrialOfTheChampion/boss_black_knight.cpp
++++ b/src/server/scripts/Northrend/CrusadersColiseum/TrialOfTheChampion/boss_black_knight.cpp
+@@ -252,7 +252,7 @@ public:
+                     if (pInstance && !summons.empty())
+                         if (Creature* ghoul = pInstance->instance->GetCreature(*summons.begin()))
+                             if (urand(0, 1))
+-                                ghoul->Yell("[Zombie] .... . Brains ....", LANG_UNIVERSAL); /// @todo: Multiple variations + not always happening, from video sources, needs sniff to transition from DB.
++                                ghoul->Yell("[Zombis] .... . Smegenų ....", LANG_UNIVERSAL); /// @todo: Multiple variations + not always happening, from video sources, needs sniff to transition from DB.
+                     break;
+                 case EVENT_SPELL_PLAGUE_STRIKE:
+                     if (me->GetVictim())
+diff --git a/src/server/scripts/Northrend/IcecrownCitadel/icecrown_citadel.cpp b/src/server/scripts/Northrend/IcecrownCitadel/icecrown_citadel.cpp
+index 5c6e30831..047cde5f3 100644
+--- a/src/server/scripts/Northrend/IcecrownCitadel/icecrown_citadel.cpp
++++ b/src/server/scripts/Northrend/IcecrownCitadel/icecrown_citadel.cpp
+@@ -3184,7 +3184,7 @@ public:
+             if (!player->GetGroup() || !player->GetGroup()->isRaidGroup() || !player->GetGroup()->IsLeader(player->GetGUID()))
+             {
+                 CloseGossipMenuFor(player);
+-                ChatHandler(player->GetSession()).PSendSysMessage("Only the raid leader can turn off the buff.");
++                ChatHandler(player->GetSession()).PSendSysMessage("Stiprinimą gali išjungti tik reido vadovas.");
+                 return true;
+             }
+             if (InstanceScript* inst = creature->GetInstanceScript())
+diff --git a/src/server/scripts/Northrend/Ulduar/Ulduar/instance_ulduar.cpp b/src/server/scripts/Northrend/Ulduar/Ulduar/instance_ulduar.cpp
+index fe0026911..3c6c43f91 100644
+--- a/src/server/scripts/Northrend/Ulduar/Ulduar/instance_ulduar.cpp
++++ b/src/server/scripts/Northrend/Ulduar/Ulduar/instance_ulduar.cpp
+@@ -874,7 +874,7 @@ public:
+                 case DATA_BRANN_MEMOTESAY:
+                     if (Creature* cr = instance->GetCreature(m_brannBronzebeardBaseCamp))
+                     {
+-                        cr->TextEmote("Go to your vehicles!", nullptr, true);
++                        cr->TextEmote("Eikite prie savo transporto priemonių!", nullptr, true);
+                     }
+                     break;
+                 case DATA_BRANN_EASY_MODE:
+diff --git a/src/server/scripts/Northrend/VaultOfArchavon/instance_vault_of_archavon.cpp b/src/server/scripts/Northrend/VaultOfArchavon/instance_vault_of_archavon.cpp
+index a0227350d..b9b30c21e 100644
+--- a/src/server/scripts/Northrend/VaultOfArchavon/instance_vault_of_archavon.cpp
++++ b/src/server/scripts/Northrend/VaultOfArchavon/instance_vault_of_archavon.cpp
+@@ -83,7 +83,7 @@ public:
+                             if (!PlayerList.IsEmpty())
+                                 for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
+                                     if (Player* player = i->GetSource())
+-                                        player->TextEmote("This instance will reset in 15 minutes.", nullptr, true);
++                                        player->TextEmote("Ši instancija bus atstatyta po 15 minučių.", nullptr, true);
+                         }
+                         else if (bf->GetTimer() <= (10 * MINUTE * IN_MILLISECONDS) && bf->GetTimer() >= (9 * MINUTE * IN_MILLISECONDS))
+                         {
+@@ -107,7 +107,7 @@ public:
+                             if (!PlayerList.IsEmpty())
+                                 for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
+                                     if (Player* player = i->GetSource())
+-                                        player->TextEmote("This instance is about to reset. Prepare to be removed.", nullptr, true);
++                                        player->TextEmote("Ši instancija netrukus bus atstatyta. Pasiruošk būti išmestas.", nullptr, true);
+                         }
+                         else if (bf->GetTimer() <= MINUTE * IN_MILLISECONDS)
+                         {
+diff --git a/src/server/scripts/Northrend/VioletHold/boss_zuramat.cpp b/src/server/scripts/Northrend/VioletHold/boss_zuramat.cpp
+index f7ec86e1b..3fafb0e9f 100644
+--- a/src/server/scripts/Northrend/VioletHold/boss_zuramat.cpp
++++ b/src/server/scripts/Northrend/VioletHold/boss_zuramat.cpp
+@@ -112,7 +112,7 @@ public:
+                     if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 60.0f, true))
+                     {
+                         me->CastSpell(target, SPELL_VOID_SHIFT, false);
+-                        me->Whisper("Gaze... into the void.", LANG_UNIVERSAL, target->ToPlayer());
++                        me->Whisper("Žvelk... į tuštumą.", LANG_UNIVERSAL, target->ToPlayer());
+                     }
+                     events.Repeat(18s, 22s);
+                     break;
+diff --git a/src/server/scripts/Northrend/zone_icecrown.cpp b/src/server/scripts/Northrend/zone_icecrown.cpp
+index 7db4f389c..c3245e58e 100644
+--- a/src/server/scripts/Northrend/zone_icecrown.cpp
++++ b/src/server/scripts/Northrend/zone_icecrown.cpp
+@@ -190,22 +190,22 @@ public:
+                     switch (quest)
+                     {
+                         case QUEST_BFV_FALLEN_HEROES:
+-                            me->Yell("$N has defeated the fallen heroes of Valhalas battles past. This is only a beginning, but it will suffice.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("$N nugalėjo praeitų Valhalos mūšių kritusius didvyrius. Tai tik pradžia, bet to pakaks.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                         case QUEST_BFV_DARK_MASTER:
+-                            me->Yell("Khit'rix the Dark Master has been defeated by $N and his band of companions. Let the next challenge be issued!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("Tamsųjį Šeimininką Khit'riksą nugalėjo $N ir jo bendražygių būrys. Tegul paskelbiamas kitas iššūkis!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                         case QUEST_BFV_SIGRID:
+-                            me->Yell("$N has defeated Sigrid Iceborn for a second time. Well, this time he did it with the help of his friends, but a win is a win!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("$N antrą kartą nugalėjo Sigridą Ledgimę. Na, šį kartą tai pavyko su draugų pagalba, bet pergalė yra pergalė!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                         case QUEST_BFV_CARNAGE:
+-                            me->Yell("The horror known as Carnage is no more. Could it be that $N is truly worthy of battle in Valhalas? We shall see.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("Siaubas, žinomas kaip Skerdynės, nebegyvas. Gal $N tikrai vertas kautis Valhaloje? Pamatysime.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                         case QUEST_BFV_THANE:
+-                            me->Yell("Thane Banahogg the Deathblow has fallen to $N and his fighting companions. He has but one challenge ahead of him. Who will it be?", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("Tanas Banahogas Mirties Smūgis krito nuo $N ir jo kovos bendražygių rankų. Likęs tik vienas iššūkis. Kas jis bus?", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                         case QUEST_BFV_FINAL:
+-                            me->Yell("The unthinkable has happened... $N has slain Prince Sandoval!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                            me->Yell("Įvyko neįsivaizduojama... $N nužudė princą Sandovalį!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                             break;
+                     }
+                     player->GroupEventHappens(quest, player);
+@@ -240,27 +240,27 @@ public:
+                         {
+                             case QUEST_BFV_FALLEN_HEROES:
+                                 events.ScheduleEvent(EVENT_VALHALAS_SECOND, 8s);
+-                                me->Yell("$N and comrades in arms have chosen to accept honorable combat within the sacred confines of Valhalas.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->Yell("$N ir ginklo draugai pasirinko priimti garbingą kovą šventose Valhalos ribose.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                                 break;
+                             case QUEST_BFV_DARK_MASTER:
+                                 events.ScheduleEvent(EVENT_VALHALAS_SECOND, 8s);
+-                                me->Yell("$N has accepted the challenge of Khit'rix the Dark Master. May the gods show mercy upon him for Khit'rix surely will not.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->Yell("$N priėmė Tamsiojo Šeimininko Khit'rikso iššūkį. Tegul dievai pasigaili, nes Khit'riksas tikrai nepasigailės.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                                 break;
+                             case QUEST_BFV_SIGRID:
+                                 PrepareSummons();
+-                                me->TextEmote("Circling Valhalas, Sigrid Iceborn approaches to seek her revenge!", nullptr, true);
++                                me->TextEmote("Apsukdama ratus aplink Valhalą, Sigrida Ledgimė artėja ieškoti keršto!", nullptr, true);
+                                 break;
+                             case QUEST_BFV_CARNAGE:
+                                 events.ScheduleEvent(EVENT_VALHALAS_SECOND, 8s);
+-                                me->Yell("From the bowels of the Underhalls comes Carnage. Brave and foolish $N has accepted the challenge. $N and his group stand ready to face the monstrosity.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->Yell("Iš Požeminių menių gelmių ateina Skerdynės. Drąsus ir kvailas $N priėmė iššūkį. $N ir jo grupė pasiruošę stoti prieš pabaisą.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                                 break;
+                             case QUEST_BFV_THANE:
+                                 events.ScheduleEvent(EVENT_VALHALAS_SECOND, 8s);
+-                                me->Yell("Thane Banahogg returns to Valhalas for the first time in ages to prove that the vrykul are the only beings worthy to fight within its sacred ring. Will $N prove him wrong?", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->Yell("Tanas Banahogas pirmą kartą per amžius grįžta į Valhalą įrodyti, kad vrykulai yra vienintelės būtybės, vertos kautis jos šventame ringe. Ar $N įrodys, kad jis klysta?", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                                 break;
+                             case QUEST_BFV_FINAL:
+                                 events.ScheduleEvent(EVENT_VALHALAS_SECOND, 8s);
+-                                me->Yell("From the depths of Icecrown Citadel, one of the Lich King's chosen comes to put an end to the existence of $N and his friends.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->Yell("Iš Ledo Karūnos citadelės gelmių ateina vienas iš Karaliaus Ličo išrinktųjų, kad padarytų galą $N ir jo draugų egzistavimui.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                                 break;
+                         }
+ 
+@@ -273,21 +273,21 @@ public:
+                         switch (currentQuest)
+                         {
+                             case QUEST_BFV_FALLEN_HEROES:
+-                                me->Yell("There can only be one outcome to such a battle: death for one side or the other. Let $n prove himself upon the bones of these outsiders who have fallen before!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+-                                me->TextEmote("The fallen heroes of Valhalas emerge from the ground to do battle once more!", nullptr, true);
++                                me->Yell("Tokia kova gali turėti tik vieną baigtį: vienos ar kitos pusės mirtį. Tegul $n pasirodo ant šių anksčiau kritusių ateivių kaulų!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                                me->TextEmote("Kritę Valhalos didvyriai išlenda iš žemės dar kartą stoti į mūšį!", nullptr, true);
+                                 break;
+                             case QUEST_BFV_DARK_MASTER:
+-                                me->TextEmote("Khit'rix the Dark Master skitters into Valhalas from the southeast!", nullptr, true);
++                                me->TextEmote("Tamsusis Šeimininkas Khit'riksas šliaužia į Valhalą iš pietryčių!", nullptr, true);
+                                 break;
+                             case QUEST_BFV_CARNAGE:
+-                                me->TextEmote("Lumbering in from the south, the smell of Carnage precedes him!", nullptr, true);
++                                me->TextEmote("Žygiuodamas iš pietų, Skerdynes lydi jų dvokas!", nullptr, true);
+                                 break;
+                             case QUEST_BFV_THANE:
+-                                me->TextEmote("Thane Banahogg appears upon the overlook to the southeast!", nullptr, true);
++                                me->TextEmote("Tanas Banahogas pasirodo apžvalgos aikštelėje pietryčiuose!", nullptr, true);
+                                 break;
+                             case QUEST_BFV_FINAL:
+-                                me->Yell("Warriors of Jotunheim, I present to you, Blood Prince Sandoval!", LANG_UNIVERSAL);
+-                                me->TextEmote("Without warning, Prince Sandoval magically appears within Valhalas!", nullptr, true);
++                                me->Yell("Jotunheimo kariai, pristatau jums Kraujo princą Sandovalį!", LANG_UNIVERSAL);
++                                me->TextEmote("Be įspėjimo princas Sandovalis stebuklingai pasirodo Valhaloje!", nullptr, true);
+                                 break;
+                         }
+ 
+@@ -296,13 +296,13 @@ public:
+                     }
+                 case EVENT_VALHALAS_THIRD:
+                     {
+-                        me->Yell("In defeating him, he and his fighting companions have proven themselves worthy of battle in this most sacred place of vrykul honor.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
++                        me->Yell("Jį nugalėję, jis ir jo kovos bendražygiai įrodė esą verti kautis šioje šventoje vrykulų garbės vietoje.", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID));
+                         events.ScheduleEvent(EVENT_VALHALAS_THIRD + 2, 7s);
+                         break;
+                     }
+                 case EVENT_VALHALAS_THIRD+2:
+                     {
+-                        me->Yell("ALL HAIL $N, CHAMPION OF VALHALAS! ", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID2));
++                        me->Yell("ŠLOVĖ $N, VALHALOS ČEMPIONUI!", LANG_UNIVERSAL, ObjectAccessor::GetPlayer(*me, playerGUID2));
+                         break;
+                     }
+                 case EVENT_VALHALAS_CHECK_PLAYER:
+@@ -337,22 +337,22 @@ public:
+         switch (quest->GetQuestId())
+         {
+             case QUEST_BFV_FALLEN_HEROES:
+-                creature->Say("Valhalas is yours to win or die in, $N. But whatever you do, stay within the bounds of the arena. To flee is to lose and be dishonored.", LANG_UNIVERSAL, player);
++                creature->Say("Valhala – tavo, kad laimėtum ar žūtum joje, $N. Bet ką bedarytum, išlik arenos ribose. Bėgti – reiškia pralaimėti ir būti negarbingam.", LANG_UNIVERSAL, player);
+                 break;
+             case QUEST_BFV_DARK_MASTER:
+-                creature->Say("Prepare yourself. Khit'rix will be entering Valhalas from the southeast. Remember, do not leave the ring or you will lose the battle.", LANG_UNIVERSAL, player);
++                creature->Say("Pasiruošk. Khit'riksas įžengs į Valhalą iš pietryčių. Atmink: nepalik ringo, kitaip pralaimėsi mūšį.", LANG_UNIVERSAL, player);
+                 break;
+             case QUEST_BFV_SIGRID:
+-                creature->Yell("Sigrid Iceborn has returned to the heights of Jotunheim to prove herself against $N. When last they met, $N bester her in personal combat. Let us see the outcome of this match.", LANG_UNIVERSAL, player);
++                creature->Yell("Sigrida Ledgimė grįžo į Jotunheimo aukštumas pasirodyti prieš $N. Paskutinį kartą susitikus, $N nugalėjo ją vienas prieš vieną. Pažiūrėkime šios kovos baigtį.", LANG_UNIVERSAL, player);
+                 break;
+             case QUEST_BFV_CARNAGE:
+-                creature->Say("Carnage is coming! Remember, no matter what you do, do NOT leave the battle ring or I will disqualify you and your group.", LANG_UNIVERSAL);
++                creature->Say("Skerdynės ateina! Atmink: ką bedarytum, NEPALIK kovos ringo, kitaip diskvalifikuosiu tave ir tavo grupę.", LANG_UNIVERSAL);
+                 break;
+             case QUEST_BFV_THANE:
+-                creature->Say("Look to the southeast and you will see the thane upon the platform near Gjonner the Merciless when he shows himself. Let him come down. Stay within the ring of Valhalas.", LANG_UNIVERSAL);
++                creature->Say("Žvelk į pietryčius ir pamatysi tano pasirodymą ant platformos prie Gjonnerio Negailestingojo. Leisk jam nusileisti. Likite Valhalos ringo ribose.", LANG_UNIVERSAL);
+                 break;
+             case QUEST_BFV_FINAL:
+-                creature->Say("It's too late to run now. Do not leave the ring. Die bravely, $N!", LANG_UNIVERSAL);
++                creature->Say("Bėgti jau per vėlu. Nepalik ringo. Mirk drąsiai, $N!", LANG_UNIVERSAL);
+                 break;
+         }
+ 
+@@ -1281,7 +1281,7 @@ public:
+             if (Unit* passenger = kit->GetPassenger(SEAT_ENGINEERING))
+                 if (init && !passenger->HasAura(SPELL_BURNING))
+                 {
+-                    me->TextEmote("Your Vehicle is burning!", GetSummoner(), true);
++                    me->TextEmote("Tavo transporto priemonė dega!", GetSummoner(), true);
+                     passenger->AddAura(SPELL_BURNING, passenger);
+                 }
+ 
+diff --git a/src/server/scripts/Northrend/zone_storm_peaks.cpp b/src/server/scripts/Northrend/zone_storm_peaks.cpp
+index ec2da77ea..694bd19ae 100644
+--- a/src/server/scripts/Northrend/zone_storm_peaks.cpp
++++ b/src/server/scripts/Northrend/zone_storm_peaks.cpp
+@@ -85,10 +85,10 @@ public:
+             switch (waypointId)
+             {
+                 case 0:
+-                    me->TextEmote("You've been seen! Use the net and Freezing elixir to keep the dwarves away!", nullptr, true);
++                    me->TextEmote("Tave pastebėjo! Naudok tinklą ir Šaldymo eliksyrą, kad atremtum nykštukus!", nullptr, true);
+                     break;
+                 case 19:
+-                    me->TextEmote("The frosthound has located the thief's hiding place. Confront him!", 0, true);
++                    me->TextEmote("Šerkšno skalikas surado vagies slėptuvę. Susidurk su juo!", 0, true);
+                     if (Unit* summoner = me->ToTempSummon()->GetSummonerUnit())
+                         summoner->ToPlayer()->KilledMonsterCredit(29677);
+                     break;
+diff --git a/src/server/scripts/Northrend/zone_zuldrak.cpp b/src/server/scripts/Northrend/zone_zuldrak.cpp
+index 8b36a3106..361fc3544 100644
+--- a/src/server/scripts/Northrend/zone_zuldrak.cpp
++++ b/src/server/scripts/Northrend/zone_zuldrak.cpp
+@@ -132,32 +132,32 @@ public:
+             switch (counter)
+             {
+                 case 1:
+-                    me->TextEmote("Quickly, get me some...", player, true);
++                    me->TextEmote("Greitai, atnešk man...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+                 case 2:
+-                    me->TextEmote("Find me some...", player, true);
++                    me->TextEmote("Surask man...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+                 case 3:
+-                    me->TextEmote("I think it needs...", player, true);
++                    me->TextEmote("Manau, reikia...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+                 case 4:
+-                    me->TextEmote("Alright, now fetch me some...", player, true);
++                    me->TextEmote("Gerai, dabar atnešk man...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+                 case 5:
+-                    me->TextEmote("Before it thickens, we must add...", player, true);
++                    me->TextEmote("Kol neišklėgo, turime įdėti...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+                 case 6:
+-                    me->TextEmote("It's thickening! Quickly get me some...", player, true);
++                    me->TextEmote("Tirštėja! Greitai atnešk man...", player, true);
+                     me->TextEmote(itemName, player, true);
+                     me->CastSpell(player, auraId, true);
+                     break;
+diff --git a/src/server/scripts/World/go_scripts.cpp b/src/server/scripts/World/go_scripts.cpp
+index ff9adc963..58ba4f9b6 100644
+--- a/src/server/scripts/World/go_scripts.cpp
++++ b/src/server/scripts/World/go_scripts.cpp
+@@ -52,7 +52,7 @@ public:
+         {
+             if (Creature* cr = go->SummonCreature(28105, 6708.7f, 5115.45f, -18.3f, 0.7f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000))
+             {
+-                cr->Yell("My treasure! You no steal from Tartek, dumb big-tongue traitor thing. Tartek and nasty dragon going to kill you! You so dumb.", LANG_UNIVERSAL);
++                cr->Yell("Mano lobis! Tu negali vogti iš Tartek, kvaila ilgaliežuvė išdavike. Tartek ir bjaurus drakonas tave užmuš! Tu tokia kvaila.", LANG_UNIVERSAL);
+                 cr->AI()->AttackStart(pPlayer);
+             }
+         }

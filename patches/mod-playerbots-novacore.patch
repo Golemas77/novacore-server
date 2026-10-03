@@ -27,11 +27,79 @@ index 7419a97b..047b4651 100644
  # Chance to reply to toxic links with toxic links (0-100)
  AiPlayerbot.ToxicLinksRepliesChance = 30
  # Chance to reply to Thunderfury with Thunderfury (0-100)
+diff --git a/src/BroadcastHelper.cpp b/src/BroadcastHelper.cpp
+index 85bc5221..67825b6e 100644
+--- a/src/BroadcastHelper.cpp
++++ b/src/BroadcastHelper.cpp
+@@ -659,11 +659,11 @@ bool BroadcastHelper::BroadcastGuildGroupOrRaidInvite(PlayerbotAI* ai, Player* /
+     {
+         if (urand(0, 3))
+         {
+-            return ai->SayToGuild(BOT_TEXT2("Hey anyone want to raid in %zone_name", placeholders));
++            return ai->SayToGuild(BOT_TEXT2("Ei, ar kas nors nori eiti į reidą (%zone_name)?", placeholders));
+         }
+         else
+         {
+-            return ai->SayToGuild(BOT_TEXT2("Hey %name I'm raiding in %zone_name do you wan to join me?", placeholders));
++            return ai->SayToGuild(BOT_TEXT2("Ei, %name, einu į reidą (%zone_name). Nori prisijungti?", placeholders));
+         }
+     }
+     else
+@@ -671,11 +671,11 @@ bool BroadcastHelper::BroadcastGuildGroupOrRaidInvite(PlayerbotAI* ai, Player* /
+         //(bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH)
+         if (urand(0, 3))
+         {
+-            return ai->SayToGuild(BOT_TEXT2("Hey anyone wanna group up in %zone_name?", placeholders));
++            return ai->SayToGuild(BOT_TEXT2("Ei, ar kas nors nori sudaryti grupę (%zone_name)?", placeholders));
+         }
+         else
+         {
+-            return ai->SayToGuild(BOT_TEXT2("Hey %name do you want join my group? I'm heading for %zone_name", placeholders));
++            return ai->SayToGuild(BOT_TEXT2("Ei, %name, nori prisijungti prie mano grupės? Keliauju į %zone_name", placeholders));
+         }
+     }
+ 
 diff --git a/src/PlayerbotAI.cpp b/src/PlayerbotAI.cpp
-index 5dbe5cb9..81d9d2bc 100644
+index 5dbe5cb9..5d19dc93 100644
 --- a/src/PlayerbotAI.cpp
 +++ b/src/PlayerbotAI.cpp
-@@ -2735,8 +2735,18 @@ bool PlayerbotAI::TellMasterNoFacing(std::ostringstream& stream, PlayerbotSecuri
+@@ -742,7 +742,7 @@ void PlayerbotAI::Reset(bool full)
+     {
+         WorldPackets::Character::LogoutCancel data = WorldPacket(CMSG_LOGOUT_CANCEL);
+         bot->GetSession()->HandleLogoutCancelOpcode(data);
+-        TellMaster("Logout cancelled!");
++        TellMaster("Atsijungimas atšauktas!");
+     }
+ 
+     currentEngine = engines[BOT_STATE_NON_COMBAT];
+@@ -927,7 +927,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
+         if (!bot->GetSession()->isLogingOut())
+         {
+             if (type == CHAT_MSG_WHISPER)
+-                TellMaster("I'm logging out!");
++                TellMaster("Atsijungiu!");
+ 
+             PlayerbotMgr* masterBotMgr = nullptr;
+             if (master)
+@@ -941,7 +941,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
+         if (bot->GetSession()->isLogingOut())
+         {
+             if (type == CHAT_MSG_WHISPER)
+-                TellMaster("Logout cancelled!");
++                TellMaster("Atsijungimas atšauktas!");
+ 
+             WorldPackets::Character::LogoutCancel data = WorldPacket(CMSG_LOGOUT_CANCEL);
+             bot->GetSession()->HandleLogoutCancelOpcode(data);
+@@ -1431,7 +1431,7 @@ void PlayerbotAI::DoNextAction(bool min)
+                 botAI->ChangeStrategy("+follow", BOT_STATE_NON_COMBAT);
+ 
+                 if (botAI->GetMaster() == botAI->GetGroupMaster())
+-                    botAI->TellMaster("Hello, I follow you!");
++                    botAI->TellMaster("Sveiki, sekiu paskui tave!");
+                 else
+                     botAI->TellMaster(!urand(0, 2) ? "Hello!" : "Hi!");
+             }
+@@ -2735,8 +2735,20 @@ bool PlayerbotAI::TellMasterNoFacing(std::ostringstream& stream, PlayerbotSecuri
      return TellMasterNoFacing(stream.str(), securityLevel);
  }
  
@@ -39,7 +107,9 @@ index 5dbe5cb9..81d9d2bc 100644
 +// "pranesimu" - juos galima isjungti nustatymu AiPlayerbot.EnableGreetWhispers = 0 (kitu, komandu atsakymu, neliecia).
 +static bool IsGreetingWhisper(std::string const& text)
 +{
-+    return text == "Hello" || text == "Hello!" || text == "Hi!" || text == "Hello, I follow you!" || text == "Goodbye!";
++    return text == "Hello" || text == "Hello!" || text == "Hi!" || text == "Hello, I follow you!" || text == "Goodbye!" ||
++           text == "Sveiki" || text == "Sveiki!" || text == "Labas!" || text == "Sveiki, sekiu paskui tave!" ||
++           text == "Sveiki, seksiu paskui tave!" || text == "Viso gero!" || text == "Iki pasimatymo!";
 +}
 +
  bool PlayerbotAI::TellMasterNoFacing(std::string const text, PlayerbotSecurityLevel securityLevel)
@@ -50,7 +120,7 @@ index 5dbe5cb9..81d9d2bc 100644
      Player* master = GetMaster();
      PlayerbotAI* masterBotAI = nullptr;
      if (master)
-@@ -4421,7 +4431,13 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
+@@ -4421,7 +4433,13 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
          for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
          {
              Player* member = gref->GetSource();
@@ -112,6 +182,165 @@ index a9a12fba..9ca95ec1 100644
      bool randomBotSayWithoutMaster;
  
      uint32 broadcastChanceMaxValue;
+diff --git a/src/PlayerbotMgr.cpp b/src/PlayerbotMgr.cpp
+index 027e2bab..9a0e11a9 100644
+--- a/src/PlayerbotMgr.cpp
++++ b/src/PlayerbotMgr.cpp
+@@ -279,7 +279,7 @@ void PlayerbotMgr::CancelLogout()
+         {
+             WorldPackets::Character::LogoutCancel data = WorldPacket(CMSG_LOGOUT_CANCEL);
+             bot->GetSession()->HandleLogoutCancelOpcode(data);
+-            botAI->TellMaster("Logout cancelled!");
++            botAI->TellMaster("Atsijungimas atšauktas!");
+         }
+     }
+ 
+@@ -368,7 +368,7 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
+                 return;
+             else if (bot)
+             {
+-                botAI->TellMaster("I'm logging out!");
++                botAI->TellMaster("Atsijungiu!");
+                 WorldPackets::Character::LogoutRequest data = WorldPacket(CMSG_LOGOUT_REQUEST);
+                 botWorldSessionPtr->HandleLogoutRequestOpcode(data);
+                 if (!bot)
+@@ -391,7 +391,7 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
+         }  // if instant logout possible, do it
+         else if (bot && (logout || !botWorldSessionPtr->isLogingOut()))
+         {
+-            botAI->TellMaster("Goodbye!");
++            botAI->TellMaster("Viso gero!");
+             RemoveFromPlayerbotsMap(guid);                  // deletes bot player ptr inside this WorldSession PlayerBotMap
+             botWorldSessionPtr->LogoutPlayer(true);  // this will delete the bot Player object and PlayerbotAI object
+             delete botWorldSessionPtr;               // finally delete the bot's WorldSession
+@@ -408,7 +408,7 @@ void PlayerbotHolder::DisablePlayerBot(ObjectGuid guid)
+         {
+             return;
+         }
+-        botAI->TellMaster("Goodbye!");
++        botAI->TellMaster("Viso gero!");
+         bot->StopMoving();
+         bot->GetMotionMaster()->Clear();
+ 
+@@ -541,7 +541,7 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
+     // set delay on login
+     botAI->SetNextCheckDelay(urand(2000, 4000));
+ 
+-    botAI->TellMaster("Hello!", PLAYERBOT_SECURITY_TALK);
++    botAI->TellMaster("Sveiki!", PLAYERBOT_SECURITY_TALK);
+ 
+     if (master && master->GetGroup() && !group)
+     {
+@@ -855,14 +855,14 @@ bool PlayerbotMgr::HandlePlayerbotMgrCommand(ChatHandler* handler, char const* a
+ {
+     if (!sPlayerbotAIConfig->enabled)
+     {
+-        handler->PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
++        handler->PSendSysMessage("|cffff0000Robotų sistema šiuo metu išjungta!");
+         return false;
+     }
+ 
+     WorldSession* m_session = handler->GetSession();
+     if (!m_session)
+     {
+-        handler->PSendSysMessage("You may only add bots from an active session");
++        handler->PSendSysMessage("Robotus gali pridėti tik iš aktyvios sesijos");
+         return false;
+     }
+ 
+@@ -870,7 +870,7 @@ bool PlayerbotMgr::HandlePlayerbotMgrCommand(ChatHandler* handler, char const* a
+     PlayerbotMgr* mgr = GET_PLAYERBOT_MGR(player);
+     if (!mgr)
+     {
+-        handler->PSendSysMessage("You cannot control bots yet");
++        handler->PSendSysMessage("Robotų dar negali valdyti");
+         return false;
+     }
+ 
+@@ -1777,7 +1777,7 @@ void PlayerbotMgr::HandleSetSecurityKeyCommand(Player* player, const std::string
+         "REPLACE INTO playerbots_account_keys (account_id, security_key) VALUES ({}, '{}')",
+         accountId, hashedKey.str());
+ 
+-    ChatHandler(player->GetSession()).PSendSysMessage("Security key set successfully.");
++    ChatHandler(player->GetSession()).PSendSysMessage("Saugos raktas sėkmingai nustatytas.");
+ }
+ 
+ void PlayerbotMgr::HandleLinkAccountCommand(Player* player, const std::string& accountName, const std::string& key)
+@@ -1785,7 +1785,7 @@ void PlayerbotMgr::HandleLinkAccountCommand(Player* player, const std::string& a
+     QueryResult result = LoginDatabase.Query("SELECT id FROM account WHERE username = '{}'", accountName);
+     if (!result)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("Account not found.");
++        ChatHandler(player->GetSession()).PSendSysMessage("Paskyra nerasta.");
+         return;
+     }
+ 
+@@ -1795,7 +1795,7 @@ void PlayerbotMgr::HandleLinkAccountCommand(Player* player, const std::string& a
+     result = PlayerbotsDatabase.Query("SELECT security_key FROM playerbots_account_keys WHERE account_id = {}", linkedAccountId);
+     if (!result)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("Invalid security key.");
++        ChatHandler(player->GetSession()).PSendSysMessage("Neteisingas saugos raktas.");
+         return;
+     }
+ 
+@@ -1812,7 +1812,7 @@ void PlayerbotMgr::HandleLinkAccountCommand(Player* player, const std::string& a
+     std::string storedKey = result->Fetch()->Get<std::string>();
+     if (hashedKey.str() != storedKey)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("Invalid security key.");
++        ChatHandler(player->GetSession()).PSendSysMessage("Neteisingas saugos raktas.");
+         return;
+     }
+ 
+@@ -1824,7 +1824,7 @@ void PlayerbotMgr::HandleLinkAccountCommand(Player* player, const std::string& a
+         "INSERT IGNORE INTO playerbots_account_links (account_id, linked_account_id) VALUES ({}, {})",
+         linkedAccountId, accountId);
+ 
+-    ChatHandler(player->GetSession()).PSendSysMessage("Account linked successfully.");
++    ChatHandler(player->GetSession()).PSendSysMessage("Paskyra sėkmingai susieta.");
+ }
+ 
+ void PlayerbotMgr::HandleViewLinkedAccountsCommand(Player* player)
+@@ -1834,11 +1834,11 @@ void PlayerbotMgr::HandleViewLinkedAccountsCommand(Player* player)
+ 
+     if (!result)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("No linked accounts.");
++        ChatHandler(player->GetSession()).PSendSysMessage("Susietų paskyrų nėra.");
+         return;
+     }
+ 
+-    ChatHandler(player->GetSession()).PSendSysMessage("Linked accounts:");
++    ChatHandler(player->GetSession()).PSendSysMessage("Susietos paskyros:");
+     do
+     {
+         Field* fields = result->Fetch();
+@@ -1853,7 +1853,7 @@ void PlayerbotMgr::HandleViewLinkedAccountsCommand(Player* player)
+         }
+         else
+         {
+-            ChatHandler(player->GetSession()).PSendSysMessage("- Unknown account");
++            ChatHandler(player->GetSession()).PSendSysMessage("- Nežinoma paskyra");
+         }
+     } while (result->NextRow());
+ }
+@@ -1863,7 +1863,7 @@ void PlayerbotMgr::HandleUnlinkAccountCommand(Player* player, const std::string&
+     QueryResult result = LoginDatabase.Query("SELECT id FROM account WHERE username = '{}'", accountName);
+     if (!result)
+     {
+-        ChatHandler(player->GetSession()).PSendSysMessage("Account not found.");
++        ChatHandler(player->GetSession()).PSendSysMessage("Paskyra nerasta.");
+         return;
+     }
+ 
+@@ -1874,5 +1874,5 @@ void PlayerbotMgr::HandleUnlinkAccountCommand(Player* player, const std::string&
+     PlayerbotsDatabase.Execute("DELETE FROM playerbots_account_links WHERE (account_id = {} AND linked_account_id = {}) OR (account_id = {} AND linked_account_id = {})",
+                                 accountId, linkedAccountId, linkedAccountId, accountId);
+ 
+-    ChatHandler(player->GetSession()).PSendSysMessage("Account unlinked successfully.");
++    ChatHandler(player->GetSession()).PSendSysMessage("Paskyra sėkmingai atsieta.");
+ }
 diff --git a/src/Playerbots.cpp b/src/Playerbots.cpp
 index ed44a70f..a77026df 100644
 --- a/src/Playerbots.cpp
@@ -153,9 +382,18 @@ index ed44a70f..a77026df 100644
  
      AddSC_playerbots_commandscript();
 diff --git a/src/RandomPlayerbotMgr.cpp b/src/RandomPlayerbotMgr.cpp
-index 1b69d7f3..78d8cc09 100644
+index 1b69d7f3..66fac0fe 100644
 --- a/src/RandomPlayerbotMgr.cpp
 +++ b/src/RandomPlayerbotMgr.cpp
+@@ -2925,7 +2925,7 @@ void RandomPlayerbotMgr::OnPlayerLogin(Player* player)
+                 {
+                     botAI->SetMaster(player);
+                     botAI->ResetStrategies();
+-                    botAI->TellMaster("Hello");
++                    botAI->TellMaster("Sveiki");
+                 }
+ 
+                 break;
 @@ -3055,6 +3055,20 @@ void RandomPlayerbotMgr::PrintStats()
      for (PlayerBotMap::iterator i = playerBots.begin(); i != playerBots.end(); ++i)
      {
@@ -185,6 +423,2465 @@ index 1b69d7f3..78d8cc09 100644
          if (botAI->AllowActivity())
              ++active;
  
+diff --git a/src/strategy/actions/AcceptInvitationAction.cpp b/src/strategy/actions/AcceptInvitationAction.cpp
+index 6c246992..159a9855 100644
+--- a/src/strategy/actions/AcceptInvitationAction.cpp
++++ b/src/strategy/actions/AcceptInvitationAction.cpp
+@@ -55,7 +55,7 @@ bool AcceptInvitationAction::Execute(Event event)
+     botAI->ChangeStrategy("+follow,-lfg,-bg", BOT_STATE_NON_COMBAT);
+     botAI->Reset();
+ 
+-    botAI->TellMaster("Hello");
++    botAI->TellMaster("Sveiki");
+ 
+     if (sPlayerbotAIConfig->summonWhenGroup && bot->GetDistance(inviter) > sPlayerbotAIConfig->sightDistance)
+     {
+diff --git a/src/strategy/actions/AcceptQuestAction.cpp b/src/strategy/actions/AcceptQuestAction.cpp
+index 82b63c64..f66d07d4 100644
+--- a/src/strategy/actions/AcceptQuestAction.cpp
++++ b/src/strategy/actions/AcceptQuestAction.cpp
+@@ -18,7 +18,7 @@ bool AcceptAllQuestsAction::ProcessQuest(Quest const* quest, Object* questGiver)
+     if (botAI->HasStrategy("debug quest", BotState::BOT_STATE_NON_COMBAT) || botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+     {
+         LOG_INFO("playerbots", "{} => Quest [{}] accepted", bot->GetName(), quest->GetTitle());
+-        bot->Say("Quest [" + text_quest + "] accepted", LANG_UNIVERSAL);
++        bot->Say("Užduotis [" + text_quest + "] priimta", LANG_UNIVERSAL);
+     }
+ 
+     return true;
+@@ -113,7 +113,7 @@ bool AcceptQuestShareAction::Execute(Event event)
+     if (bot->HasQuest(quest))
+     {
+         bot->SetDivider(ObjectGuid::Empty);
+-        botAI->TellError("I have this quest");
++        botAI->TellError("Jau turiu šią užduotį");
+         return false;
+     }
+ 
+@@ -121,7 +121,7 @@ bool AcceptQuestShareAction::Execute(Event event)
+     {
+         // can't take quest
+         bot->SetDivider(ObjectGuid::Empty);
+-        botAI->TellError("I can't take this quest");
++        botAI->TellError("Negaliu priimti šios užduoties");
+ 
+         return false;
+     }
+@@ -149,7 +149,7 @@ bool AcceptQuestShareAction::Execute(Event event)
+             bot->CastSpell(bot, qInfo->GetSrcSpell(), true);
+         }
+ 
+-        botAI->TellMaster("Quest accepted");
++        botAI->TellMaster("Užduotis priimta");
+         return true;
+     }
+ 
+diff --git a/src/strategy/actions/AreaTriggerAction.cpp b/src/strategy/actions/AreaTriggerAction.cpp
+index 5937a0f7..1a123923 100644
+--- a/src/strategy/actions/AreaTriggerAction.cpp
++++ b/src/strategy/actions/AreaTriggerAction.cpp
+@@ -36,7 +36,7 @@ bool ReachAreaTriggerAction::Execute(Event event)
+ 
+     if (bot->GetMapId() != at->map)
+     {
+-        botAI->TellError("I won't follow: too far away");
++        botAI->TellError("Nesekiu: per toli");
+         return true;
+     }
+ 
+@@ -44,7 +44,7 @@ bool ReachAreaTriggerAction::Execute(Event event)
+ 
+     float distance = bot->GetDistance(at->x, at->y, at->z);
+     float delay = 1000.0f * distance / bot->GetSpeed(MOVE_RUN) + sPlayerbotAIConfig->reactDelay;
+-    botAI->TellError("Wait for me");
++    botAI->TellError("Palauk manęs");
+     botAI->SetNextCheckDelay(delay);
+     context->GetValue<LastMovement&>("last area trigger")->Get().lastAreaTrigger = triggerId;
+ 
+@@ -69,6 +69,6 @@ bool AreaTriggerAction::Execute(Event event)
+     p.rpos(0);
+     bot->GetSession()->HandleAreaTriggerOpcode(p);
+ 
+-    botAI->TellMaster("Hello");
++    botAI->TellMaster("Sveiki");
+     return true;
+ }
+diff --git a/src/strategy/actions/ArenaTeamActions.cpp b/src/strategy/actions/ArenaTeamActions.cpp
+index 3563bfe1..bd8224c9 100644
+--- a/src/strategy/actions/ArenaTeamActions.cpp
++++ b/src/strategy/actions/ArenaTeamActions.cpp
+@@ -31,7 +31,7 @@ bool ArenaTeamAcceptAction::Execute(Event event)
+     if (bot->GetArenaTeamId(at->GetSlot()))
+     {
+         // bot is already in an arena team
+-        bot->Say("Sorry, I am already in such team", LANG_UNIVERSAL);
++        bot->Say("Atsiprašau, jau esu tokioje komandoje", LANG_UNIVERSAL);
+         accept = false;
+     }
+ 
+@@ -39,7 +39,7 @@ bool ArenaTeamAcceptAction::Execute(Event event)
+     {
+         WorldPacket data(CMSG_ARENA_TEAM_ACCEPT);
+         bot->GetSession()->HandleArenaTeamAcceptOpcode(data);
+-        bot->Say("Thanks for the invite!", LANG_UNIVERSAL);
++        bot->Say("Ačiū už kvietimą!", LANG_UNIVERSAL);
+         LOG_INFO("playerbots", "Bot {} <{}> accepts Arena Team invite", bot->GetGUID().ToString().c_str(),
+                  bot->GetName().c_str());
+         return true;
+diff --git a/src/strategy/actions/AttackAction.cpp b/src/strategy/actions/AttackAction.cpp
+index e557a178..9ba82c33 100644
+--- a/src/strategy/actions/AttackAction.cpp
++++ b/src/strategy/actions/AttackAction.cpp
+@@ -38,7 +38,7 @@ bool AttackMyTargetAction::Execute(Event event)
+     if (!guid)
+     {
+         if (verbose)
+-            botAI->TellError("You have no target");
++            botAI->TellError("Neturi taikinio");
+ 
+         return false;
+     }
+@@ -64,7 +64,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+         bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
+     {
+         if (verbose)
+-            botAI->TellError("I cannot attack in flight");
++            botAI->TellError("Negaliu pulti skrydžio metu");
+ 
+         return false;
+     }
+@@ -72,7 +72,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+     if (!target)
+     {
+         if (verbose)
+-            botAI->TellError("I have no target");
++            botAI->TellError("Neturiu taikinio");
+ 
+         return false;
+     }
+@@ -80,7 +80,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+     if (!target->IsInWorld())
+     {
+         if (verbose)
+-            botAI->TellError(std::string(target->GetName()) + " is no longer in the world.");
++            botAI->TellError(std::string(target->GetName()) + " nebėra pasaulyje.");
+         return false;
+     }
+ 
+@@ -89,7 +89,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+         && (target->IsPlayer() || target->IsPet()))
+     {
+         if (verbose)
+-            botAI->TellError("I cannot attack other players in PvP prohibited areas.");
++            botAI->TellError("Negaliu pulti kitų žaidėjų zonose, kur PvP draudžiamas.");
+ 
+         return false;
+     }
+@@ -97,35 +97,35 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+     if (bot->IsFriendlyTo(target))
+     {
+         if (verbose)
+-            botAI->TellError(std::string(target->GetName()) + " is friendly to me.");
++            botAI->TellError(std::string(target->GetName()) + " man draugiškas.");
+         return false;
+     }
+ 
+     if (target->isDead())
+     {
+         if (verbose)
+-            botAI->TellError(std::string(target->GetName()) + " is dead.");
++            botAI->TellError(std::string(target->GetName()) + " negyvas.");
+         return false;
+     }
+ 
+     if (!bot->IsWithinLOSInMap(target))
+     {
+         if (verbose)
+-            botAI->TellError(std::string(target->GetName()) + " is not in my sight.");
++            botAI->TellError(std::string(target->GetName()) + " nėra mano regėjimo lauke.");
+         return false;
+     }
+ 
+     if (sameTarget && inCombat && sameAttackMode)
+     {
+         if (verbose)
+-            botAI->TellError("I am already attacking " + std::string(target->GetName()) + ".");
++            botAI->TellError("Jau puolu" + std::string(target->GetName()) + ".");
+         return false;
+     }
+ 
+     if (!bot->IsValidAttackTarget(target))
+     {
+         if (verbose)
+-            botAI->TellError("I cannot attack an invalid target.");
++            botAI->TellError("Negaliu pulti netinkamo taikinio.");
+ 
+         return false;
+     }
+diff --git a/src/strategy/actions/BankAction.cpp b/src/strategy/actions/BankAction.cpp
+index d49559a0..7f6306d8 100644
+--- a/src/strategy/actions/BankAction.cpp
++++ b/src/strategy/actions/BankAction.cpp
+@@ -23,7 +23,7 @@ bool BankAction::Execute(Event event)
+         return ExecuteBank(text, npc);
+     }
+ 
+-    botAI->TellError("Cannot find banker nearby");
++    botAI->TellError("Netoliese nerandu bankininko");
+     return false;
+ }
+ 
+@@ -109,7 +109,7 @@ bool BankAction::Deposit(Item* pItem)
+ 
+ void BankAction::ListItems()
+ {
+-    botAI->TellMaster("=== Bank ===");
++    botAI->TellMaster("=== Bankas ===");
+ 
+     std::map<uint32, uint32> items;
+     std::map<uint32, bool> soulbound;
+diff --git a/src/strategy/actions/BattleGroundTactics.cpp b/src/strategy/actions/BattleGroundTactics.cpp
+index fab932f7..68c5d1b2 100644
+--- a/src/strategy/actions/BattleGroundTactics.cpp
++++ b/src/strategy/actions/BattleGroundTactics.cpp
+@@ -1275,13 +1275,13 @@ bool BGTactics::HandleConsoleCommand(ChatHandler* handler, char const* args)
+ {
+     if (!sPlayerbotAIConfig->enabled)
+     {
+-        handler->PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
++        handler->PSendSysMessage("|cffff0000Robotų sistema šiuo metu išjungta!");
+         return true;
+     }
+     WorldSession* session = handler->GetSession();
+     if (!session)
+     {
+-        handler->PSendSysMessage("Command can only be used from an active session");
++        handler->PSendSysMessage("Komandą galima naudoti tik iš aktyvios sesijos");
+         return true;
+     }
+     std::string const commandOutput = HandleConsoleCommandPrivate(session, args);
+@@ -4181,7 +4181,7 @@ bool ArenaTactics::Execute(Event event)
+ 
+                 float x, y, z;
+                 target->GetPosition(x, y, z);
+-                botAI->TellMasterNoFacing("Repositioning to exit the LoS target!");
++                botAI->TellMasterNoFacing("Keičiu poziciją, kad išeičiau iš taikinio matomumo!");
+                 return MoveTo(target->GetMapId(), x + frand(-1, +1), y + frand(-1, +1), z, false, true);
+             }
+         }
+diff --git a/src/strategy/actions/BuffAction.cpp b/src/strategy/actions/BuffAction.cpp
+index 103f8b99..efcaa6b8 100644
+--- a/src/strategy/actions/BuffAction.cpp
++++ b/src/strategy/actions/BuffAction.cpp
+@@ -64,19 +64,19 @@ void BuffAction::TellHeader(uint32 subClass)
+     switch (subClass)
+     {
+         case ITEM_SUBCLASS_ELIXIR:
+-            botAI->TellMaster("--- Elixir ---");
++            botAI->TellMaster("--- Eliksyras ---");
+             return;
+         case ITEM_SUBCLASS_FLASK:
+-            botAI->TellMaster("--- Flask ---");
++            botAI->TellMaster("--- Kolba ---");
+             return;
+         case ITEM_SUBCLASS_SCROLL:
+-            botAI->TellMaster("--- Scroll ---");
++            botAI->TellMaster("--- Ritinys ---");
+             return;
+         case ITEM_SUBCLASS_FOOD:
+-            botAI->TellMaster("--- Food ---");
++            botAI->TellMaster("--- Maistas ---");
+             return;
+         case ITEM_SUBCLASS_ITEM_ENHANCEMENT:
+-            botAI->TellMaster("--- Enchant ---");
++            botAI->TellMaster("--- Užkerėjimas ---");
+             return;
+     }
+ }
+diff --git a/src/strategy/actions/BuyAction.cpp b/src/strategy/actions/BuyAction.cpp
+index d5e2505b..626c99bd 100644
+--- a/src/strategy/actions/BuyAction.cpp
++++ b/src/strategy/actions/BuyAction.cpp
+@@ -215,7 +215,7 @@ bool BuyAction::Execute(Event event)
+ 
+     if (!vendored)
+     {
+-        botAI->TellError("There are no vendors nearby");
++        botAI->TellError("Netoliese nėra pardavėjų");
+         return false;
+     }
+ 
+diff --git a/src/strategy/actions/ChangeStrategyAction.cpp b/src/strategy/actions/ChangeStrategyAction.cpp
+index 1690774d..4410cb00 100644
+--- a/src/strategy/actions/ChangeStrategyAction.cpp
++++ b/src/strategy/actions/ChangeStrategyAction.cpp
+@@ -45,7 +45,7 @@ bool ChangeNonCombatStrategyAction::Execute(Event event)
+     {
+         if (text.find("loot") != std::string::npos || text.find("gather") != std::string::npos)
+         {
+-            botAI->TellError("You can change any strategy except loot and gather");
++            botAI->TellError("Gali keisti bet kurią strategiją, išskyrus grobį ir rinkimą");
+             return false;
+         }
+     }
+diff --git a/src/strategy/actions/ChatShortcutActions.cpp b/src/strategy/actions/ChatShortcutActions.cpp
+index f7e02163..260b440a 100644
+--- a/src/strategy/actions/ChatShortcutActions.cpp
++++ b/src/strategy/actions/ChatShortcutActions.cpp
+@@ -89,7 +89,7 @@ bool FollowChatShortcutAction::Execute(Event event)
+ 
+         if (moved)
+         {
+-            botAI->TellMaster("Following");
++            botAI->TellMaster("Sekiu");
+             return true;
+         }
+     }
+@@ -101,17 +101,17 @@ bool FollowChatShortcutAction::Execute(Event event)
+         if (bot->isDead())
+         {
+             bot->ResurrectPlayer(1.0f, false);
+-            botAI->TellMasterNoFacing("Back from the grave!");
++            botAI->TellMasterNoFacing("Grįžau iš kapo!");
+         }
+         else
+-            botAI->TellMaster("You are too far away from me! I will there soon.");
++            botAI->TellMaster("Esi per toli nuo manęs! Netrukus ten būsiu.");
+ 
+         bot->TeleportTo(master->GetMapId(), master->GetPositionX(), master->GetPositionY(), master->GetPositionZ(),
+     master->GetOrientation()); return true;
+     }
+     */
+ 
+-    botAI->TellMaster("Following");
++    botAI->TellMaster("Sekiu");
+     return true;
+ }
+ 
+@@ -128,7 +128,7 @@ bool StayChatShortcutAction::Execute(Event event)
+     SetReturnPosition(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+     SetStayPosition(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+ 
+-    botAI->TellMaster("Staying");
++    botAI->TellMaster("Lieku");
+     return true;
+ }
+ 
+@@ -143,7 +143,7 @@ bool MoveFromGroupChatShortcutAction::Execute(Event event)
+     botAI->ChangeStrategy("+move from group", BOT_STATE_NON_COMBAT);
+     botAI->ChangeStrategy("+move from group", BOT_STATE_COMBAT);
+ 
+-    botAI->TellMaster("Moving away from group");
++    botAI->TellMaster("Tolstu nuo grupės");
+     return true;
+ }
+ 
+@@ -162,11 +162,11 @@ bool FleeChatShortcutAction::Execute(Event event)
+ 
+     if (bot->GetMapId() != master->GetMapId() || bot->GetDistance(master) > sPlayerbotAIConfig->sightDistance)
+     {
+-        botAI->TellError("I will not flee with you - too far away");
++        botAI->TellError("Nebėgsiu kartu su tavimi – per toli");
+         return true;
+     }
+ 
+-    botAI->TellMaster("Fleeing");
++    botAI->TellMaster("Bėgu");
+     return true;
+ }
+ 
+@@ -183,7 +183,7 @@ bool GoawayChatShortcutAction::Execute(Event event)
+     ResetReturnPosition();
+     ResetStayPosition();
+ 
+-    botAI->TellMaster("Running away");
++    botAI->TellMaster("Bėgu šalin");
+     return true;
+ }
+ 
+@@ -199,7 +199,7 @@ bool GrindChatShortcutAction::Execute(Event event)
+     ResetReturnPosition();
+     ResetStayPosition();
+ 
+-    botAI->TellMaster("Grinding");
++    botAI->TellMaster("Malu priešus");
+     return true;
+ }
+ 
+@@ -219,7 +219,7 @@ bool TankAttackChatShortcutAction::Execute(Event event)
+     ResetReturnPosition();
+     ResetStayPosition();
+ 
+-    botAI->TellMaster("Attacking");
++    botAI->TellMaster("Puolu");
+     return true;
+ }
+ 
+@@ -235,7 +235,7 @@ bool MaxDpsChatShortcutAction::Execute(Event event)
+     botAI->Reset();
+ 
+     botAI->ChangeStrategy("-threat,-conserve mana,-cast time,+dps debuff,+boost", BOT_STATE_COMBAT);
+-    botAI->TellMaster("Max DPS!");
++    botAI->TellMaster("Didžiausia žala!");
+ 
+     return true;
+ }
+@@ -249,7 +249,7 @@ bool NaxxChatShortcutAction::Execute(Event event)
+     botAI->Reset();
+     botAI->ChangeStrategy("+naxx", BOT_STATE_NON_COMBAT);
+     botAI->ChangeStrategy("+naxx", BOT_STATE_COMBAT);
+-    botAI->TellMasterNoFacing("Add Naxx Strategies!");
++    botAI->TellMasterNoFacing("Pridėk Naksramo strategijas!");
+     // bot->Say("Add Naxx Strategies!", LANG_UNIVERSAL);
+     return true;
+ }
+@@ -263,6 +263,6 @@ bool BwlChatShortcutAction::Execute(Event event)
+     botAI->Reset();
+     botAI->ChangeStrategy("+bwl", BOT_STATE_NON_COMBAT);
+     botAI->ChangeStrategy("+bwl", BOT_STATE_COMBAT);
+-    botAI->TellMasterNoFacing("Add Bwl Strategies!");
++    botAI->TellMasterNoFacing("Pridėk Juodauolės viršūnės strategijas!");
+     return true;
+ }
+diff --git a/src/strategy/actions/ChooseTargetActions.cpp b/src/strategy/actions/ChooseTargetActions.cpp
+index 0a5bd7c4..b2d1f56c 100644
+--- a/src/strategy/actions/ChooseTargetActions.cpp
++++ b/src/strategy/actions/ChooseTargetActions.cpp
+@@ -154,7 +154,7 @@ bool AttackRtiTargetAction::Execute(Event event)
+     }
+     else
+     {
+-        botAI->TellError("I dont see my rti attack target");
++        botAI->TellError("Nematau savo žymos puolimo taikinio");
+     }
+ 
+     return false;
+diff --git a/src/strategy/actions/ChooseTravelTargetAction.cpp b/src/strategy/actions/ChooseTravelTargetAction.cpp
+index 8c7bc6c9..1c239950 100644
+--- a/src/strategy/actions/ChooseTravelTargetAction.cpp
++++ b/src/strategy/actions/ChooseTravelTargetAction.cpp
+@@ -354,7 +354,7 @@ void ChooseTravelTargetAction::ReportTravelTarget(TravelTarget* newTarget, Trave
+     {
+         if (!oldTarget->getDestination() || oldTarget->getDestination()->getName() != "NullTravelDestination")
+         {
+-            botAI->TellMaster("No where to travel. Idling a bit.");
++            botAI->TellMaster("Nėra kur keliauti. Šiek tiek pasėdžiu.");
+         }
+     }
+ }
+diff --git a/src/strategy/actions/CustomStrategyEditAction.cpp b/src/strategy/actions/CustomStrategyEditAction.cpp
+index 8f043fd5..5d7f76af 100644
+--- a/src/strategy/actions/CustomStrategyEditAction.cpp
++++ b/src/strategy/actions/CustomStrategyEditAction.cpp
+@@ -31,7 +31,7 @@ bool CustomStrategyEditAction::Execute(Event event)
+ 
+ bool CustomStrategyEditAction::PrintHelp()
+ {
+-    botAI->TellMaster("=== Custom strategies ===");
++    botAI->TellMaster("=== Pasirinktinės strategijos ===");
+ 
+     uint32 owner = botAI->GetBot()->GetGUID().GetCounter();
+ 
+@@ -48,7 +48,7 @@ bool CustomStrategyEditAction::PrintHelp()
+         } while (result->NextRow());
+     }
+ 
+-    botAI->TellMaster("Usage: cs <name> <idx> <command>");
++    botAI->TellMaster("Naudojimas: cs <vardas> <nr.> <komanda>");
+     return false;
+ }
+ 
+diff --git a/src/strategy/actions/DebugAction.cpp b/src/strategy/actions/DebugAction.cpp
+index 0c2cbac1..af7b79f4 100644
+--- a/src/strategy/actions/DebugAction.cpp
++++ b/src/strategy/actions/DebugAction.cpp
+@@ -88,7 +88,7 @@ bool DebugAction::Execute(Event event)
+         }
+         else
+         {
+-            botAI->TellMasterNoFacing("Destination " + destination + " not found.");
++            botAI->TellMasterNoFacing("Paskirties vieta" + destination + " nerasta.");
+             return true;
+         }
+     }
+@@ -100,7 +100,7 @@ bool DebugAction::Execute(Event event)
+ 
+         if (!quest)
+         {
+-            botAI->TellMasterNoFacing("Quest " + text.substr(6) + " not found.");
++            botAI->TellMasterNoFacing("Užduotis" + text.substr(6) + " nerasta.");
+             return false;
+         }
+ 
+@@ -201,7 +201,7 @@ bool DebugAction::Execute(Event event)
+             endNode->setLinked(false);
+         }
+ 
+-        botAI->TellMasterNoFacing("Node " + name + " created.");
++        botAI->TellMasterNoFacing("Mazgas" + name + " sukurtas.");
+ 
+         sTravelNodeMap->setHasToGen();
+ 
+@@ -218,12 +218,12 @@ bool DebugAction::Execute(Event event)
+ 
+         if (startNode->isImportant())
+         {
+-            botAI->TellMasterNoFacing("Node can not be removed.");
++            botAI->TellMasterNoFacing("Mazgo negalima pašalinti.");
+         }
+ 
+         sTravelNodeMap->m_nMapMtx.lock();
+         sTravelNodeMap->removeNode(startNode);
+-        botAI->TellMasterNoFacing("Node removed.");
++        botAI->TellMasterNoFacing("Mazgas pašalintas.");
+         sTravelNodeMap->m_nMapMtx.unlock();
+ 
+         sTravelNodeMap->setHasToGen();
+diff --git a/src/strategy/actions/DropQuestAction.cpp b/src/strategy/actions/DropQuestAction.cpp
+index 672358cb..b4f42723 100644
+--- a/src/strategy/actions/DropQuestAction.cpp
++++ b/src/strategy/actions/DropQuestAction.cpp
+@@ -51,10 +51,10 @@ bool DropQuestAction::Execute(Event event)
+         const Quest* pQuest = sObjectMgr->GetQuestTemplate(entry);
+         const std::string text_quest = ChatHelper::FormatQuest(pQuest);
+         LOG_INFO("playerbots", "{} => Quest [ {} ] removed", bot->GetName(), pQuest->GetTitle());
+-        bot->Say("Quest [ " + text_quest + " ] removed", LANG_UNIVERSAL);
++        bot->Say("Užduotis [" + text_quest + " ] pašalinta", LANG_UNIVERSAL);
+     }
+ 
+-    botAI->TellMaster("Quest removed");
++    botAI->TellMaster("Užduotis pašalinta");
+     return true;
+ }
+ 
+@@ -64,7 +64,7 @@ bool CleanQuestLogAction::Execute(Event event)
+     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();
+     if (!requester)
+     {
+-        botAI->TellMaster("No event owner detected");
++        botAI->TellMaster("Įvykio savininko neaptikta");
+         return false;
+     }
+ 
+@@ -76,7 +76,7 @@ bool CleanQuestLogAction::Execute(Event event)
+     // Only output this message if "debug rpg" strategy is enabled
+     if (botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+     {
+-        botAI->TellMaster("Clean Quest Log command received, removing grey/trivial quests...");
++        botAI->TellMaster("Gauta užduočių žurnalo valymo komanda, šalinamos pilkos/menkavertės užduotys...");
+     }
+ 
+     uint8 botLevel = bot->GetLevel();  // Get bot's level
+@@ -128,7 +128,7 @@ bool CleanQuestLogAction::Execute(Event event)
+             // Output only if "debug rpg" strategy is enabled
+             if (botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+             {
+-                botAI->TellMaster("Quest [ " + quest->GetTitle() + " ] will be removed because it is trivial (grey).");
++                botAI->TellMaster("Užduotis [" + quest->GetTitle() + " ] bus pašalinta, nes menkaverte (pilka).");
+             }
+ 
+             // Remove quest
+@@ -144,12 +144,12 @@ bool CleanQuestLogAction::Execute(Event event)
+             {
+                 const std::string text_quest = ChatHelper::FormatQuest(quest);
+                 LOG_INFO("playerbots", "{} => Quest [ {} ] removed", bot->GetName(), quest->GetTitle());
+-                bot->Say("Quest [ " + text_quest + " ] removed", LANG_UNIVERSAL);
++                bot->Say("Užduotis [" + text_quest + " ] pašalinta", LANG_UNIVERSAL);
+             }
+ 
+             if (botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+             {
+-                botAI->TellMaster("Quest [ " + quest->GetTitle() + " ] has been removed.");
++                botAI->TellMaster("Užduotis [" + quest->GetTitle() + " ] pašalinta.");
+             }
+         }
+         else
+@@ -157,7 +157,7 @@ bool CleanQuestLogAction::Execute(Event event)
+             // Only output if "debug rpg" strategy is enabled
+             if (botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+             {
+-                botAI->TellMaster("Quest [ " + quest->GetTitle() + " ] is not trivial and will be kept.");
++                botAI->TellMaster("Užduotis [" + quest->GetTitle() + " ] nėra menkaverte ir bus paliekama.");
+             }
+         }
+     }
+@@ -236,9 +236,9 @@ void CleanQuestLogAction::DropQuestType(uint8& numQuest, uint8 wantNum, bool isG
+         {
+             const std::string text_quest = ChatHelper::FormatQuest(quest);
+             LOG_INFO("playerbots", "{} => Quest [ {} ] removed", bot->GetName(), quest->GetTitle());
+-            bot->Say("Quest [ " + text_quest + " ] removed", LANG_UNIVERSAL);
++            bot->Say("Užduotis [" + text_quest + " ] pašalinta", LANG_UNIVERSAL);
+         }
+-        botAI->TellMaster("Quest removed" + chat->FormatQuest(quest));
++        botAI->TellMaster("Užduotis pašalinta" + chat->FormatQuest(quest));
+     }
+ }
+ 
+diff --git a/src/strategy/actions/EmoteAction.cpp b/src/strategy/actions/EmoteAction.cpp
+index ba44424b..ec3e0f3b 100644
+--- a/src/strategy/actions/EmoteAction.cpp
++++ b/src/strategy/actions/EmoteAction.cpp
+@@ -164,7 +164,7 @@ bool EmoteActionBase::ReceiveEmote(Player* source, uint32 emote, bool verbal)
+             if (botAI->GetMaster() == source)
+             {
+                 botAI->ChangeStrategy("-follow,+stay", BOT_STATE_NON_COMBAT);
+-                botAI->TellMasterNoFacing("Fine.. I'll stay right here..");
++                botAI->TellMasterNoFacing("Gerai.. liksiu čia..");
+             }
+             break;
+         case TEXT_EMOTE_BECKON:
+@@ -172,7 +172,7 @@ bool EmoteActionBase::ReceiveEmote(Player* source, uint32 emote, bool verbal)
+             if (botAI->GetMaster() == source)
+             {
+                 botAI->ChangeStrategy("+follow", BOT_STATE_NON_COMBAT);
+-                botAI->TellMasterNoFacing("Wherever you go, I'll follow..");
++                botAI->TellMasterNoFacing("Kur tu eisi, ten ir aš..");
+             }
+             break;
+         case TEXT_EMOTE_WAVE:
+@@ -580,36 +580,36 @@ bool EmoteActionBase::ReceiveEmote(Player* source, uint32 emote, bool verbal)
+             break;
+         /*case TEXT_EMOTE_BADFEELING:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_QUESTION);
+-            bot->Say("I'm just waiting for the ominous music now...", LANG_UNIVERSAL);
++            bot->Say("Dabar tik laukiu grėsmingos muzikos...", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_MAP:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_NO);
+-            bot->Say("Noooooooo.. you just couldn't ask for directions, huh?", LANG_UNIVERSAL);
++            bot->Say("Neeeee.. negalėjai tiesiog paklausti kelio, ar ne?", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_IDEA:
+         case TEXT_EMOTE_THINK:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_NO);
+-            bot->Say("Oh boy.. another genius idea...", LANG_UNIVERSAL);
++            bot->Say("O ne.. dar viena genialaus plano idėja...", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_OFFER:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_NO);
+-            bot->Say("No thanks.. I had some back at the last village", LANG_UNIVERSAL);
++            bot->Say("Ne, ačiū.. jau valgiau paskutiniame kaime", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_PET:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_ROAR);
+-            bot->Say("Do I look like a dog to you?!", LANG_UNIVERSAL);
++            bot->Say("Ar aš tau panašus į šunį?!", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_ROLLEYES:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
+-            bot->Say("Keep doing that and I'll roll those eyes right out of your head..", LANG_UNIVERSAL);
++            bot->Say("Taip darydamas rizikuoji, kad išridensiu tau akis iš galvos..", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_SING:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_APPLAUD);
+-            bot->Say("Lovely... just lovely..", LANG_UNIVERSAL);
++            bot->Say("Puiku... tiesiog puiku..", LANG_UNIVERSAL);
+             break;
+         case TEXT_EMOTE_COVEREARS:
+             bot->HandleEmoteCommand(EMOTE_ONESHOT_EXCLAMATION);
+-            bot->Yell("You think that's going to help you?!", LANG_UNIVERSAL);
++            bot->Yell("Manai, kad tai tau padės?!", LANG_UNIVERSAL);
+             break;*/
+         default:
+             // return false;
+diff --git a/src/strategy/actions/EquipGlyphsAction.cpp b/src/strategy/actions/EquipGlyphsAction.cpp
+index d879e753..dd39cb76 100644
+--- a/src/strategy/actions/EquipGlyphsAction.cpp
++++ b/src/strategy/actions/EquipGlyphsAction.cpp
+@@ -106,7 +106,7 @@ bool EquipGlyphsAction::Execute(Event event)
+     std::vector<GlyphInfo const*> glyphs;
+     if (!CollectGlyphs(itemIds, glyphs))
+     {
+-        botAI->TellMaster("Usage: glyph equip <6 glyph item IDs> (3 major, 3 minor).");
++        botAI->TellMaster("Naudojimas: glyph equip <6 glifų daiktų ID> (3 didieji, 3 mažieji).");
+         return false;
+     }
+ 
+@@ -144,12 +144,12 @@ bool EquipGlyphsAction::Execute(Event event)
+ 
+         if (!placed)
+         {
+-            botAI->TellMaster("Not enought empty sockets for all glyphs.");
++            botAI->TellMaster("Nepakanka laisvų lizdų visiems glifams.");
+             return false;
+         }
+     }
+ 
+-    botAI->TellMaster("Glyphs updated.");
++    botAI->TellMaster("Glifai atnaujinti.");
+ 
+ 	// Flag for custom glyphs
+     botAI->GetAiObjectContext()->GetValue<bool>("custom_glyphs")->Set(true);
+diff --git a/src/strategy/actions/FlagAction.cpp b/src/strategy/actions/FlagAction.cpp
+index 566f2df0..292cbe18 100644
+--- a/src/strategy/actions/FlagAction.cpp
++++ b/src/strategy/actions/FlagAction.cpp
+@@ -10,7 +10,7 @@
+ 
+ bool FlagAction::TellUsage()
+ {
+-    botAI->TellError("Usage: flag cloak/helm/pvp on/set/off/clear/toggle/?");
++    botAI->TellError("Naudojimas: flag cloak/helm/pvp on/set/off/clear/toggle/?");
+     return false;
+ }
+ 
+diff --git a/src/strategy/actions/FollowActions.cpp b/src/strategy/actions/FollowActions.cpp
+index 24079293..d873c413 100644
+--- a/src/strategy/actions/FollowActions.cpp
++++ b/src/strategy/actions/FollowActions.cpp
+@@ -131,15 +131,15 @@ bool FleeToMasterAction::Execute(Event event)
+     if (distance < sPlayerbotAIConfig->reactDistance * 3)
+     {
+         if (!urand(0, 3))
+-            botAI->TellMaster("I am close, wait for me!");
++            botAI->TellMaster("Esu arti, palauk manęs!");
+     }
+     else if (distance < 1000)
+     {
+         if (!urand(0, 10))
+-            botAI->TellMaster("I heading to your position.");
++            botAI->TellMaster("Skubu į tavo poziciją.");
+     }
+     else if (!urand(0, 20))
+-        botAI->TellMaster("I am traveling to your position.");
++        botAI->TellMaster("Keliauju į tavo poziciją.");
+ 
+     botAI->SetNextCheckDelay(3000);
+ 
+diff --git a/src/strategy/actions/GenericActions.cpp b/src/strategy/actions/GenericActions.cpp
+index ae8010e1..9e6640c2 100644
+--- a/src/strategy/actions/GenericActions.cpp
++++ b/src/strategy/actions/GenericActions.cpp
+@@ -114,7 +114,7 @@ bool TogglePetSpellAutoCastAction::Execute(Event event)
+ 
+     // Debug message if pet spells have been toggled and debug is enabled
+     if (toggled && sPlayerbotAIConfig->petChatCommandDebug == 1)
+-        botAI->TellMaster("Pet autocast spells have been toggled.");
++        botAI->TellMaster("Augintinio automatinio burtų naudojimo nustatymai perjungti.");
+ 
+     return toggled;
+ }
+@@ -180,7 +180,7 @@ bool SetPetStanceAction::Execute(Event /*event*/)
+     // If there are no controlled pets or guardians, notify the player and exit
+     if (targets.empty())
+     {
+-        botAI->TellError("You have no pet or guardian pet.");
++        botAI->TellError("Neturi nei augintinio, nei sargo.");
+         return false;
+     }
+ 
+@@ -222,7 +222,7 @@ bool SetPetStanceAction::Execute(Event /*event*/)
+ 
+     // If debug is enabled in config, inform the master of the new stance
+     if (sPlayerbotAIConfig->petChatCommandDebug == 1)
+-        botAI->TellMaster("Pet stance set to " + stanceText + " (applied to all pets/guardians).");
++        botAI->TellMaster("Augintinio laikysena nustatyta:" + stanceText + " (taikoma visiems augintiniams/sargams).");
+ 
+     return true;
+ }
+diff --git a/src/strategy/actions/GoAction.cpp b/src/strategy/actions/GoAction.cpp
+index bb1076d6..78d71825 100644
+--- a/src/strategy/actions/GoAction.cpp
++++ b/src/strategy/actions/GoAction.cpp
+@@ -60,7 +60,7 @@ bool GoAction::Execute(Event event)
+         }
+         else
+         {
+-            botAI->TellMasterNoFacing("Clearing travel target");
++            botAI->TellMasterNoFacing("Išvalau kelionės tikslą");
+             target->setTarget(sTravelMgr->nullTravelDestination, sTravelMgr->nullWorldPosition);
+             target->setForced(false);
+             return true;
+@@ -78,7 +78,7 @@ bool GoAction::Execute(Event event)
+                     if (sServerFacade->IsDistanceGreaterThan(sServerFacade->GetDistance2d(bot, go),
+                                                              sPlayerbotAIConfig->reactDistance))
+                     {
+-                        botAI->TellError("It is too far away");
++                        botAI->TellError("Per toli");
+                         return false;
+                     }
+ 
+@@ -179,20 +179,20 @@ bool GoAction::Execute(Event event)
+         if (sServerFacade->IsDistanceGreaterThan(sServerFacade->GetDistance2d(bot, x, y),
+                                                  sPlayerbotAIConfig->reactDistance))
+         {
+-            botAI->TellMaster("It is too far away");
++            botAI->TellMaster("Per toli");
+             return false;
+         }
+ 
+         if (map->IsInWater(bot->GetPhaseMask(), x, y, z, bot->GetCollisionHeight()))
+         {
+-            botAI->TellError("It is in water");
++            botAI->TellError("Jis vandenyje");
+             return false;
+         }
+ 
+         float ground = map->GetHeight(x, y, z + 0.5f);
+         if (ground <= INVALID_HEIGHT)
+         {
+-            botAI->TellError("I can't go there");
++            botAI->TellError("Negaliu ten nueiti");
+             return false;
+         }
+ 
+@@ -212,7 +212,7 @@ bool GoAction::Execute(Event event)
+         if (sServerFacade->IsDistanceGreaterThan(sServerFacade->GetDistance2d(bot, pos.x, pos.y),
+                                                  sPlayerbotAIConfig->reactDistance))
+         {
+-            botAI->TellError("It is too far away");
++            botAI->TellError("Per toli");
+             return false;
+         }
+ 
+@@ -222,6 +222,6 @@ bool GoAction::Execute(Event event)
+         return MoveNear(bot->GetMapId(), pos.x, pos.y, pos.z + 0.5f, sPlayerbotAIConfig->followDistance);
+     }
+ 
+-    botAI->TellMaster("Whisper 'go x,y', 'go [game object]', 'go unit' or 'go position' and I will go there");
++    botAI->TellMaster("Pašnabždėk „go x,y“, „go [žaidimo objektas]“, „go unit“ arba „go position“ ir ten nueisiu");
+     return false;
+ }
+diff --git a/src/strategy/actions/GossipHelloAction.cpp b/src/strategy/actions/GossipHelloAction.cpp
+index 762b82b8..95952c8b 100644
+--- a/src/strategy/actions/GossipHelloAction.cpp
++++ b/src/strategy/actions/GossipHelloAction.cpp
+@@ -61,7 +61,7 @@ bool GossipHelloAction::Execute(Event event)
+     }
+     else if (!bot->PlayerTalkClass)
+     {
+-        botAI->TellError("I need to talk first");
++        botAI->TellError("Pirmiausia turiu pasikalbėti");
+         return false;
+     }
+     else
+@@ -125,7 +125,7 @@ bool GossipHelloAction::ProcessGossip(int32 menuToSelect)
+     GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
+     if (menuToSelect != -1 && !menu.GetItem(menuToSelect))
+     {
+-        botAI->TellError("Unknown gossip option");
++        botAI->TellError("Nežinoma pokalbio parinktis");
+         return false;
+     }
+ 
+diff --git a/src/strategy/actions/GuildAcceptAction.cpp b/src/strategy/actions/GuildAcceptAction.cpp
+index f926a68e..d401c808 100644
+--- a/src/strategy/actions/GuildAcceptAction.cpp
++++ b/src/strategy/actions/GuildAcceptAction.cpp
+@@ -28,17 +28,17 @@ bool GuildAcceptAction::Execute(Event event)
+     uint32 guildId = inviter->GetGuildId();
+     if (!guildId)
+     {
+-        botAI->TellError("You are not in a guild!");
++        botAI->TellError("Nesi gildijoje!");
+         accept = false;
+     }
+     else if (bot->GetGuildId())
+     {
+-        botAI->TellError("Sorry, I am in a guild already");
++        botAI->TellError("Atsiprašau, jau esu gildijoje");
+         accept = false;
+     }
+     else if (!botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, false, inviter, true))
+     {
+-        botAI->TellError("Sorry, I don't want to join your guild :(");
++        botAI->TellError("Atsiprašau, nenoriu stoti į tavo gildiją :(");
+         accept = false;
+     }
+ 
+diff --git a/src/strategy/actions/GuildBankAction.cpp b/src/strategy/actions/GuildBankAction.cpp
+index a7d50a99..8585675e 100644
+--- a/src/strategy/actions/GuildBankAction.cpp
++++ b/src/strategy/actions/GuildBankAction.cpp
+@@ -16,7 +16,7 @@ bool GuildBankAction::Execute(Event event)
+ 
+     if (!bot->GetGuildId() || (GetMaster() && GetMaster()->GetGuildId() != bot->GetGuildId()))
+     {
+-        botAI->TellMaster("I'm not in your guild!");
++        botAI->TellMaster("Nesu tavo gildijoje!");
+         return false;
+     }
+ 
+@@ -30,7 +30,7 @@ bool GuildBankAction::Execute(Event event)
+         return Execute(text, go);
+     }
+ 
+-    botAI->TellMaster("Cannot find the guild bank nearby");
++    botAI->TellMaster("Netoliese nerandu gildijos banko");
+     return false;
+ }
+ 
+diff --git a/src/strategy/actions/GuildManagementActions.cpp b/src/strategy/actions/GuildManagementActions.cpp
+index 591b5252..3f8667b1 100644
+--- a/src/strategy/actions/GuildManagementActions.cpp
++++ b/src/strategy/actions/GuildManagementActions.cpp
+@@ -311,7 +311,7 @@ bool GuildLeaveAction::Execute(Event event)
+     Player* owner = event.getOwner();
+     if (owner && !botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, false, owner, true))
+     {
+-        botAI->TellError("Sorry, I am happy in my guild :)");
++        botAI->TellError("Atsiprašau, man gerai savo gildijoje :)");
+         return false;
+     }
+ 
+diff --git a/src/strategy/actions/HireAction.cpp b/src/strategy/actions/HireAction.cpp
+index 6ad575fc..16d67fa7 100644
+--- a/src/strategy/actions/HireAction.cpp
++++ b/src/strategy/actions/HireAction.cpp
+@@ -29,13 +29,13 @@ bool HireAction::Execute(Event event)
+ 
+     if (charCount >= 10)
+     {
+-        botAI->TellMaster("You already have the maximum number of characters");
++        botAI->TellMaster("Jau turi didžiausią leidžiamą veikėjų skaičių");
+         return false;
+     }
+ 
+     if (bot->GetLevel() > master->GetLevel())
+     {
+-        botAI->TellMaster("You cannot hire higher level characters than you");
++        botAI->TellMaster("Negali samdyti aukštesnio lygio veikėjų nei tu pats");
+         return false;
+     }
+ 
+@@ -51,7 +51,7 @@ bool HireAction::Execute(Event event)
+         return false;
+     }
+ 
+-    botAI->TellMaster("I will join you at your next relogin");
++    botAI->TellMaster("Prisijungsiu prie tavęs, kai kitą kartą prisijungsi");
+ 
+     bot->SetMoney(moneyReq);
+     sRandomPlayerbotMgr->Remove(bot);
+diff --git a/src/strategy/actions/InventoryAction.cpp b/src/strategy/actions/InventoryAction.cpp
+index d2d54da1..03577907 100644
+--- a/src/strategy/actions/InventoryAction.cpp
++++ b/src/strategy/actions/InventoryAction.cpp
+@@ -130,40 +130,40 @@ void InventoryAction::TellItems(std::map<uint32, uint32> itemMap, std::map<uint3
+             switch (proto->Class)
+             {
+                 case ITEM_CLASS_CONSUMABLE:
+-                    botAI->TellMaster("--- consumable ---");
++                    botAI->TellMaster("--- vartojamieji ---");
+                     break;
+                 case ITEM_CLASS_CONTAINER:
+-                    botAI->TellMaster("--- container ---");
++                    botAI->TellMaster("--- talpyklos ---");
+                     break;
+                 case ITEM_CLASS_WEAPON:
+-                    botAI->TellMaster("--- weapon ---");
++                    botAI->TellMaster("--- ginklai ---");
+                     break;
+                 case ITEM_CLASS_ARMOR:
+-                    botAI->TellMaster("--- armor ---");
++                    botAI->TellMaster("--- šarvai ---");
+                     break;
+                 case ITEM_CLASS_REAGENT:
+-                    botAI->TellMaster("--- reagent ---");
++                    botAI->TellMaster("--- reagentai ---");
+                     break;
+                 case ITEM_CLASS_PROJECTILE:
+-                    botAI->TellMaster("--- projectile ---");
++                    botAI->TellMaster("--- šaudmenys ---");
+                     break;
+                 case ITEM_CLASS_TRADE_GOODS:
+-                    botAI->TellMaster("--- trade goods ---");
++                    botAI->TellMaster("--- prekybos prekės ---");
+                     break;
+                 case ITEM_CLASS_RECIPE:
+-                    botAI->TellMaster("--- recipe ---");
++                    botAI->TellMaster("--- receptai ---");
+                     break;
+                 case ITEM_CLASS_QUIVER:
+-                    botAI->TellMaster("--- quiver ---");
++                    botAI->TellMaster("--- strėlinės ---");
+                     break;
+                 case ITEM_CLASS_QUEST:
+-                    botAI->TellMaster("--- quest items ---");
++                    botAI->TellMaster("--- užduočių daiktai ---");
+                     break;
+                 case ITEM_CLASS_KEY:
+-                    botAI->TellMaster("--- keys ---");
++                    botAI->TellMaster("--- raktai ---");
+                     break;
+                 case ITEM_CLASS_MISC:
+-                    botAI->TellMaster("--- other ---");
++                    botAI->TellMaster("--- kita ---");
+                     break;
+             }
+         }
+diff --git a/src/strategy/actions/LeaveGroupAction.cpp b/src/strategy/actions/LeaveGroupAction.cpp
+index 58602805..266452da 100644
+--- a/src/strategy/actions/LeaveGroupAction.cpp
++++ b/src/strategy/actions/LeaveGroupAction.cpp
+@@ -78,7 +78,7 @@ bool LeaveGroupAction::Leave(Player* player)
+ 
+     bool aiMaster = GET_PLAYERBOT_AI(botAI->GetMaster()) != nullptr;
+ 
+-    botAI->TellMaster("Goodbye!", PLAYERBOT_SECURITY_TALK);
++    botAI->TellMaster("Viso gero!", PLAYERBOT_SECURITY_TALK);
+ 
+     bool randomBot = sRandomPlayerbotMgr->IsRandomBot(bot);
+     bool shouldStay = randomBot && bot->GetGroup() && player == bot;
+diff --git a/src/strategy/actions/ListQuestsActions.cpp b/src/strategy/actions/ListQuestsActions.cpp
+index 7f5d9878..9453d631 100644
+--- a/src/strategy/actions/ListQuestsActions.cpp
++++ b/src/strategy/actions/ListQuestsActions.cpp
+@@ -44,16 +44,16 @@ void ListQuestsAction::ListQuests(QuestListFilter filter, QuestTravelDetail trav
+     bool showCompleted = filter & QUEST_LIST_FILTER_COMPLETED;
+ 
+     if (showIncompleted)
+-        botAI->TellMaster("--- Incompleted quests ---");
++        botAI->TellMaster("--- Neįvykdytos užduotys ---");
+ 
+     uint32 incompleteCount = ListQuests(false, !showIncompleted, travelDetail);
+ 
+     if (showCompleted)
+-        botAI->TellMaster("--- Completed quests ---");
++        botAI->TellMaster("--- Įvykdytos užduotys ---");
+ 
+     uint32 completeCount = ListQuests(true, !showCompleted, travelDetail);
+ 
+-    botAI->TellMaster("--- Summary ---");
++    botAI->TellMaster("--- Santrauka ---");
+ 
+     std::ostringstream out;
+     out << "Total: " << (completeCount + incompleteCount) << " / 25 (incompleted: " << incompleteCount
+diff --git a/src/strategy/actions/ListSpellsAction.cpp b/src/strategy/actions/ListSpellsAction.cpp
+index 80277ea8..05bc1bfa 100644
+--- a/src/strategy/actions/ListSpellsAction.cpp
++++ b/src/strategy/actions/ListSpellsAction.cpp
+@@ -296,7 +296,7 @@ bool ListSpellsAction::Execute(Event event)
+ 
+     std::vector<std::pair<uint32, std::string>> spells = GetSpellList(filter);
+ 
+-    botAI->TellMaster("=== Spells ===");
++    botAI->TellMaster("=== Burtai ===");
+ 
+     std::sort(spells.begin(), spells.end(), CompareSpells);
+ 
+diff --git a/src/strategy/actions/LootStrategyAction.cpp b/src/strategy/actions/LootStrategyAction.cpp
+index db09727f..eb271250 100644
+--- a/src/strategy/actions/LootStrategyAction.cpp
++++ b/src/strategy/actions/LootStrategyAction.cpp
+@@ -80,12 +80,12 @@ bool LootStrategyAction::Execute(Event event)
+                 if (j != alwaysLootItems.end())
+                     alwaysLootItems.erase(j);
+ 
+-                botAI->TellMaster("Item(s) removed from always loot list");
++                botAI->TellMaster("Daiktas (-ai) pašalintas (-i) iš visada imamų daiktų sąrašo");
+             }
+             else
+             {
+                 alwaysLootItems.insert(itemid);
+-                botAI->TellMaster("Item(s) added to always loot list");
++                botAI->TellMaster("Daiktas (-ai) pridėtas (-i) į visada imamų daiktų sąrašą");
+             }
+         }
+     }
+diff --git a/src/strategy/actions/MailAction.cpp b/src/strategy/actions/MailAction.cpp
+index f15034b2..82f376dc 100644
+--- a/src/strategy/actions/MailAction.cpp
++++ b/src/strategy/actions/MailAction.cpp
+@@ -17,7 +17,7 @@ class TellMailProcessor : public MailProcessor
+ public:
+     bool Before(PlayerbotAI* botAI) override
+     {
+-        botAI->TellMaster("=== Mailbox ===");
++        botAI->TellMaster("=== Paštas ===");
+         tells.clear();
+         return true;
+     }
+@@ -83,7 +83,7 @@ public:
+         Player* bot = botAI->GetBot();
+         if (!CheckBagSpace(bot))
+         {
+-            botAI->TellError("Not enough bag space");
++            botAI->TellError("Nepakanka vietos kuprinėje");
+             return false;
+         }
+ 
+@@ -256,7 +256,7 @@ bool MailAction::Execute(Event event)
+ 
+     if (!MailProcessor::FindMailbox(botAI))
+     {
+-        botAI->TellError("There is no mailbox nearby");
++        botAI->TellError("Netoliese nėra pašto dėžutės");
+         return false;
+     }
+ 
+@@ -272,7 +272,7 @@ bool MailAction::Execute(Event event)
+     if (text.empty())
+     {
+         botAI->TellMaster(
+-            "whisper 'mail ?' to query mailbox, 'mail take/delete/read filter' to take/delete/read mails by filter");
++            "Parašyk šnabždesiu „mail ?“, kad pamatytum pašto dėžutę, arba „mail take/delete/read filtras“, kad paimtum/ištrintum/perskaitytum laiškus pagal filtrą");
+         return false;
+     }
+ 
+diff --git a/src/strategy/actions/MovementActions.cpp b/src/strategy/actions/MovementActions.cpp
+index b2a36efd..12a4ac50 100644
+--- a/src/strategy/actions/MovementActions.cpp
++++ b/src/strategy/actions/MovementActions.cpp
+@@ -171,7 +171,7 @@ bool MovementAction::MoveToLOS(WorldObject* target, bool ranged)
+     if (dest.isSet())
+         return MoveTo(dest.mapId, dest.x, dest.y, dest.z);
+     else
+-        botAI->TellError("All paths not in LOS");
++        botAI->TellError("Visi keliai užstoti");
+ 
+     return false;
+ }
+@@ -1168,13 +1168,13 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
+         if (bot->isDead() && botAI->GetMaster()->IsAlive())
+         {
+             bot->ResurrectPlayer(1.0f, false);
+-            botAI->TellMasterNoFacing("I live, again!");
++            botAI->TellMasterNoFacing("Vėl gyvenu!");
+         }
+         else
+-            botAI->TellError("I am stuck while following");
++            botAI->TellError("Užstrigau sekimo metu");
+ 
+         bot->CombatStop(true);
+-        botAI->TellMasterNoFacing("I will there soon.");
++        botAI->TellMasterNoFacing("Netrukus ten būsiu.");
+         bot->TeleportTo(target->GetMapId(), target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(),
+     target->GetOrientation()); return false;
+     }
+@@ -1387,7 +1387,7 @@ bool MovementAction::Flee(Unit* target)
+ 
+     if (!IsMovingAllowed())
+     {
+-        botAI->TellError("I am stuck while fleeing");
++        botAI->TellError("Užstrigau bėgimo metu");
+         return false;
+     }
+ 
+@@ -1543,7 +1543,7 @@ bool MovementAction::Flee(Unit* target)
+     float rx, ry, rz;
+     if (!manager.CalculateDestination(&rx, &ry, &rz))
+     {
+-        botAI->TellError("Nowhere to flee");
++        botAI->TellError("Nėra kur bėgti");
+         return false;
+     }
+ 
+@@ -2511,7 +2511,7 @@ bool DisperseSetAction::Execute(Event event)
+     if (text == "disable")
+     {
+         RESET_AI_VALUE(float, "disperse distance");
+-        botAI->TellMasterNoFacing("Disable disperse");
++        botAI->TellMasterNoFacing("Išjungti išsisklaidymą");
+         return true;
+     }
+     if (text == "enable" || text == "reset")
+diff --git a/src/strategy/actions/OutfitAction.cpp b/src/strategy/actions/OutfitAction.cpp
+index 32a8424e..cc2717e0 100644
+--- a/src/strategy/actions/OutfitAction.cpp
++++ b/src/strategy/actions/OutfitAction.cpp
+@@ -16,9 +16,9 @@ bool OutfitAction::Execute(Event event)
+     if (param == "?")
+     {
+         List();
+-        botAI->TellMaster("outfit <name> +[item] to add items");
+-        botAI->TellMaster("outfit <name> -[item] to remove items");
+-        botAI->TellMaster("outfit <name> equip/replace to equip items");
++        botAI->TellMaster("outfit <vardas> +[daiktas] – pridėti daiktų");
++        botAI->TellMaster("outfit <vardas> -[daiktas] – pašalinti daiktus");
++        botAI->TellMaster("outfit <vardas> equip/replace – užsidėti daiktus");
+     }
+     else
+     {
+diff --git a/src/strategy/actions/PetAction.cpp b/src/strategy/actions/PetAction.cpp
+index e149b42e..8da37da3 100644
+--- a/src/strategy/actions/PetAction.cpp
++++ b/src/strategy/actions/PetAction.cpp
+@@ -25,7 +25,7 @@ bool PetAction::Execute(Event event)
+     if (param.empty())
+     {
+         // If no parameter is provided, show usage instructions and return.
+-        botAI->TellError("Usage: pet <aggressive|defensive|passive|stance|attack|follow|stay>");
++        botAI->TellError("Naudojimas: pet <aggressive|defensive|passive|stance|attack|follow|stay>");
+         return false;
+     }
+ 
+@@ -52,7 +52,7 @@ bool PetAction::Execute(Event event)
+     // If no pets or guardians are found, notify and return.
+     if (targets.empty())
+     {
+-        botAI->TellError("You have no pet or guardian pet.");
++        botAI->TellError("Neturi nei augintinio, nei sargo.");
+         return false;
+     }
+ 
+@@ -98,7 +98,7 @@ bool PetAction::Execute(Event event)
+                     stance = "unknown";
+                     break;
+             }
+-            botAI->TellMaster("Current stance of " + type + " \"" + name + "\": " + stance + ".");
++            botAI->TellMaster("Dabartinė laikysena:" + type + " \"" + name + "\": " + stance + ".");
+         }
+         return true;
+     }
+@@ -121,17 +121,17 @@ bool PetAction::Execute(Event event)
+         // If no valid target is selected, show an error and return.
+         if (!targetUnit)
+         {
+-            botAI->TellError("No valid target selected by master.");
++            botAI->TellError("Šeimininkas nepasirinko tinkamo taikinio.");
+             return false;
+         }
+         if (!targetUnit->IsAlive())
+         {
+-            botAI->TellError("Target is not alive.");
++            botAI->TellError("Taikinys negyvas.");
+             return false;
+         }
+         if (!bot->IsValidAttackTarget(targetUnit))
+         {
+-            botAI->TellError("Target is not a valid attack target for the bot.");
++            botAI->TellError("Taikinys netinkamas robotui pulti.");
+             return false;
+         }
+ 
+@@ -182,9 +182,9 @@ bool PetAction::Execute(Event event)
+         }
+         // Inform the master if the command succeeded or failed.
+         if (didAttack && sPlayerbotAIConfig->petChatCommandDebug == 1)
+-            botAI->TellMaster("Pet commanded to attack your target.");
++            botAI->TellMaster("Augintiniui įsakyta pulti tavo taikinį.");
+         else if (!didAttack)
+-            botAI->TellError("Pet did not attack. (Already attacking or unable to attack target)");
++            botAI->TellError("Augintinis nepuolė. (Jau puola arba negali pulti taikinio)");
+         return didAttack;
+     }
+     // The "follow" command makes all pets/guardians follow the bot.
+@@ -192,7 +192,7 @@ bool PetAction::Execute(Event event)
+     {
+         botAI->PetFollow();
+         if (sPlayerbotAIConfig->petChatCommandDebug == 1)
+-            botAI->TellMaster("Pet commanded to follow.");
++            botAI->TellMaster("Augintiniui įsakyta sekti.");
+         return true;
+     }
+     // The "stay" command causes all pets/guardians to stop and stay in place.
+@@ -229,14 +229,14 @@ bool PetAction::Execute(Event event)
+             }
+         }
+         if (sPlayerbotAIConfig->petChatCommandDebug == 1)
+-            botAI->TellMaster("Pet commanded to stay.");
++            botAI->TellMaster("Augintiniui įsakyta likti.");
+         return true;
+     }
+     // Unknown command: show usage instructions and return.
+     else
+     {
+-        botAI->TellError("Unknown pet command: " + param +
+-                         ". Use: pet <aggressive|defensive|passive|stance|attack|follow|stay>");
++        botAI->TellError("Nežinoma augintinio komanda:" + param +
++                         ". Naudok: pet <aggressive|defensive|passive|stance|attack|follow|stay>");
+         return false;
+     }
+ 
+@@ -251,7 +251,7 @@ bool PetAction::Execute(Event event)
+ 
+     // Inform the master of the new stance if debug is enabled.
+     if (sPlayerbotAIConfig->petChatCommandDebug == 1)
+-        botAI->TellMaster("Pet stance set to " + stanceText + ".");
++        botAI->TellMaster("Augintinio laikysena nustatyta:" + stanceText + ".");
+ 
+     return true;
+ }
+diff --git a/src/strategy/actions/PetitionSignAction.cpp b/src/strategy/actions/PetitionSignAction.cpp
+index 025f0447..6d25a533 100644
+--- a/src/strategy/actions/PetitionSignAction.cpp
++++ b/src/strategy/actions/PetitionSignAction.cpp
+@@ -38,7 +38,7 @@ bool PetitionSignAction::Execute(Event event)
+         if (bot->GetArenaTeamId(slot))
+         {
+             // player is already in an arena team
+-            botAI->TellError("Sorry, I am already in such team");
++            botAI->TellError("Atsiprašau, jau esu tokioje komandoje");
+             accept = false;
+         }
+     }
+@@ -46,13 +46,13 @@ bool PetitionSignAction::Execute(Event event)
+     {
+         if (bot->GetGuildId())
+         {
+-            botAI->TellError("Sorry, I am in a guild already");
++            botAI->TellError("Atsiprašau, jau esu gildijoje");
+             accept = false;
+         }
+ 
+         if (bot->GetGuildIdInvited())
+         {
+-            botAI->TellError("Sorry, I am invited to a guild already");
++            botAI->TellError("Atsiprašau, jau esu pakviestas į gildiją");
+             accept = false;
+         }
+ 
+@@ -60,7 +60,7 @@ bool PetitionSignAction::Execute(Event event)
+         /*if (QueryResult* result = CharacterDatabase.Query("SELECT playerguid FROM petition_sign WHERE player_account =
+         {} AND petitionguid = {}'", bot->GetSession()->GetAccountId(), petitionGuid.GetCounter()))
+         {
+-            botAI->TellError("Sorry, I already signed this pettition");
++            botAI->TellError("Atsiprašau, jau pasirašiau šią peticiją");
+             accept = false;
+         }
+         */
+@@ -88,7 +88,7 @@ bool PetitionSignAction::Execute(Event event)
+         WorldPacket data(CMSG_PETITION_SIGN, 20);
+         data << petitionGuid << unk;
+         bot->GetSession()->HandlePetitionSignOpcode(data);
+-        bot->Say("Thanks for the invite!", LANG_UNIVERSAL);
++        bot->Say("Ačiū už kvietimą!", LANG_UNIVERSAL);
+         LOG_INFO("playerbots", "Bot {} <{}> accepts {} invite", bot->GetGUID().ToString().c_str(),
+                  bot->GetName().c_str(), isArena ? "Arena" : "Guild");
+         return true;
+diff --git a/src/strategy/actions/PositionAction.cpp b/src/strategy/actions/PositionAction.cpp
+index 3888f28f..8e4a6dab 100644
+--- a/src/strategy/actions/PositionAction.cpp
++++ b/src/strategy/actions/PositionAction.cpp
+@@ -52,7 +52,7 @@ bool PositionAction::Execute(Event event)
+     std::vector<std::string> params = split(param, ' ');
+     if (params.size() != 2)
+     {
+-        botAI->TellMaster("Whisper position <name> ?/set/reset");
++        botAI->TellMaster("Pašnabždėk position <vardas> ?/set/reset");
+         return false;
+     }
+ 
+@@ -169,7 +169,7 @@ bool ReturnToStayPositionAction::isPossible()
+         const float distance = bot->GetDistance(stayPosition.x, stayPosition.y, stayPosition.z);
+         if (distance > sPlayerbotAIConfig->reactDistance)
+         {
+-            botAI->TellMaster("The stay position is too far to return. I am going to stay where I am now");
++            botAI->TellMaster("Pozicija per toli, kad grįžčiau. Liksiu ten, kur esu dabar");
+ 
+             // Set the stay position to current position
+             stayPosition.Set(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
+diff --git a/src/strategy/actions/QueryQuestAction.cpp b/src/strategy/actions/QueryQuestAction.cpp
+index 960bf84a..9543a859 100644
+--- a/src/strategy/actions/QueryQuestAction.cpp
++++ b/src/strategy/actions/QueryQuestAction.cpp
+@@ -117,7 +117,7 @@ void QueryQuestAction::TellObjectives(uint32 questId)
+     // Checks if the questTemplate is valid
+     if (!questTemplate)
+     {
+-        botAI->TellMaster("Quest template not found.");
++        botAI->TellMaster("Užduoties šablono nerasta.");
+         return;
+     }
+ 
+diff --git a/src/strategy/actions/QuestAction.cpp b/src/strategy/actions/QuestAction.cpp
+index 29201944..8e123dff 100644
+--- a/src/strategy/actions/QuestAction.cpp
++++ b/src/strategy/actions/QuestAction.cpp
+@@ -156,9 +156,9 @@ bool QuestAction::CompleteQuest(Player* player, uint32 entry)
+     if (botAI->HasStrategy("debug quest", BotState::BOT_STATE_NON_COMBAT) || botAI->HasStrategy("debug rpg", BotState::BOT_STATE_COMBAT))
+     {
+         LOG_INFO("playerbots", "{} => Quest [ {} ] completed", bot->GetName(), pQuest->GetTitle());
+-        bot->Say("Quest [ " + text_quest + " ] completed", LANG_UNIVERSAL);
++        bot->Say("Užduotis [" + text_quest + " ] įvykdyta", LANG_UNIVERSAL);
+     }
+-    botAI->TellMasterNoFacing("Quest completed " + text_quest);
++    botAI->TellMasterNoFacing("Užduotis įvykdyta" + text_quest);
+ 
+     player->CompleteQuest(entry);
+ 
+@@ -186,7 +186,7 @@ bool QuestAction::ProcessQuests(WorldObject* questGiver)
+     {
+         //if (botAI->HasStrategy("debug", BotState::BOT_STATE_COMBAT) || botAI->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
+ 
+-        botAI->TellError("Cannot talk to quest giver");
++        botAI->TellError("Negaliu kalbėtis su užduoties davėju");
+         return false;
+     }
+ 
+@@ -286,7 +286,7 @@ bool QuestUpdateCompleteAction::Execute(Event event)
+             // }
+         const auto format = ChatHelper::FormatQuest(qInfo);
+         if (botAI->GetMaster())
+-            botAI->TellMasterNoFacing("Quest completed " + format);
++            botAI->TellMasterNoFacing("Užduotis įvykdyta" + format);
+         BroadcastHelper::BroadcastQuestUpdateComplete(botAI, bot, qInfo);
+         botAI->rpgStatistic.questCompleted++;
+         // LOG_DEBUG("playerbots", "[New rpg] {} complete quest {}", bot->GetName(), qInfo->GetQuestId());
+@@ -454,12 +454,12 @@ bool QuestUpdateFailedTimerAction::Execute(Event event)
+     {
+         std::map<std::string, std::string> placeholders;
+         placeholders["%quest_link"] = botAI->GetChatHelper()->FormatQuest(qInfo);
+-        botAI->TellMaster(BOT_TEXT2("Failed timer for %quest_link, abandoning", placeholders));
++        botAI->TellMaster(BOT_TEXT2("Baigėsi laikas užduočiai %quest_link, jos atsisakau", placeholders));
+         BroadcastHelper::BroadcastQuestUpdateFailedTimer(botAI, bot, qInfo);
+     }
+     else
+     {
+-        botAI->TellMaster("Failed timer for " + std::to_string(questId));
++        botAI->TellMaster("Nepavyko laiku:" + std::to_string(questId));
+     }
+ 
+     //drop quest
+diff --git a/src/strategy/actions/ReadyCheckAction.cpp b/src/strategy/actions/ReadyCheckAction.cpp
+index a8a2d8ca..5d5785db 100644
+--- a/src/strategy/actions/ReadyCheckAction.cpp
++++ b/src/strategy/actions/ReadyCheckAction.cpp
+@@ -91,19 +91,19 @@ public:
+         {
+             if (!bot->GetUInt32Value(PLAYER_AMMO_ID))
+             {
+-                botAI->TellError("Out of ammo!");
++                botAI->TellError("Baigėsi šaudmenys!");
+                 return false;
+             }
+ 
+             if (!bot->GetPet())
+             {
+-                botAI->TellError("No pet!");
++                botAI->TellError("Nėra augintinio!");
+                 return false;
+             }
+ 
+             if (bot->GetPet()->GetHappinessState() == UNHAPPY)
+             {
+-                botAI->TellError("Pet is unhappy!");
++                botAI->TellError("Augintinis nelaimingas!");
+                 return false;
+             }
+         }
+diff --git a/src/strategy/actions/ReleaseSpiritAction.cpp b/src/strategy/actions/ReleaseSpiritAction.cpp
+index cff34f8d..72b356fe 100644
+--- a/src/strategy/actions/ReleaseSpiritAction.cpp
++++ b/src/strategy/actions/ReleaseSpiritAction.cpp
+@@ -22,7 +22,7 @@ bool ReleaseSpiritAction::Execute(Event event)
+     {
+         if (!bot->InBattleground()) 
+         {
+-            botAI->TellMasterNoFacing("I am not dead, will wait here");
++            botAI->TellMasterNoFacing("Dar gyvenu, lauksiu čia");
+             // -follow in bg is overwriten each tick with +follow
+             // +stay in bg causes stuttering effect as bot is cycled between +stay and +follow each tick
+             botAI->ChangeStrategy("-follow,+stay", BOT_STATE_NON_COMBAT);
+@@ -33,7 +33,7 @@ bool ReleaseSpiritAction::Execute(Event event)
+ 
+     if (bot->GetCorpse() && bot->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+     {
+-        botAI->TellMasterNoFacing("I am already a spirit");
++        botAI->TellMasterNoFacing("Jau esu dvasia");
+         return false;
+     }
+ 
+diff --git a/src/strategy/actions/RepairAllAction.cpp b/src/strategy/actions/RepairAllAction.cpp
+index 2eaf07c3..1049ba8b 100644
+--- a/src/strategy/actions/RepairAllAction.cpp
++++ b/src/strategy/actions/RepairAllAction.cpp
+@@ -56,6 +56,6 @@ bool RepairAllAction::Execute(Event event)
+         return true;
+     }
+ 
+-    botAI->TellError("Cannot find any npc to repair at");
++    botAI->TellError("Nerandu NPC, kur būtų galima pasitaisyti");
+     return false;
+ }
+diff --git a/src/strategy/actions/ResetAiAction.cpp b/src/strategy/actions/ResetAiAction.cpp
+index 181b0974..f235f065 100644
+--- a/src/strategy/actions/ResetAiAction.cpp
++++ b/src/strategy/actions/ResetAiAction.cpp
+@@ -46,6 +46,6 @@ bool ResetAiAction::Execute(Event event)
+     }
+     sPlayerbotDbStore->Reset(botAI);
+     botAI->ResetStrategies(false);
+-    botAI->TellMaster("AI was reset to defaults");
++    botAI->TellMaster("DI atstatytas į numatytąjį");
+     return true;
+ }
+diff --git a/src/strategy/actions/ResetInstancesAction.cpp b/src/strategy/actions/ResetInstancesAction.cpp
+index e8768446..6d9c07aa 100644
+--- a/src/strategy/actions/ResetInstancesAction.cpp
++++ b/src/strategy/actions/ResetInstancesAction.cpp
+@@ -12,7 +12,7 @@ bool ResetInstancesAction::Execute(Event event)
+     WorldPacket packet(CMSG_RESET_INSTANCES, 0);
+     bot->GetSession()->HandleResetInstancesOpcode(packet);
+ 
+-    botAI->TellMaster("Resetting all instances");
++    botAI->TellMaster("Atstatau visas instancijas");
+     return true;
+ }
+ 
+diff --git a/src/strategy/actions/ReviveFromCorpseAction.cpp b/src/strategy/actions/ReviveFromCorpseAction.cpp
+index 960f438f..f5025619 100644
+--- a/src/strategy/actions/ReviveFromCorpseAction.cpp
++++ b/src/strategy/actions/ReviveFromCorpseAction.cpp
+@@ -29,7 +29,7 @@ bool ReviveFromCorpseAction::Execute(Event event)
+         {
+             if (!botAI->HasStrategy("follow", BOT_STATE_NON_COMBAT))
+             {
+-                botAI->TellMasterNoFacing("Welcome back!");
++                botAI->TellMasterNoFacing("Sveiki sugrįžus!");
+                 botAI->ChangeStrategy("+follow,-stay", BOT_STATE_NON_COMBAT);
+                 return true;
+             }
+@@ -297,7 +297,7 @@ bool SpiritHealerAction::Execute(Event event)
+     Corpse* corpse = bot->GetCorpse();
+     if (!corpse)
+     {
+-        botAI->TellError("I am not a spirit");
++        botAI->TellError("Nesu dvasia");
+         return false;
+     }
+ 
+@@ -322,7 +322,7 @@ bool SpiritHealerAction::Execute(Event event)
+                 bot->SpawnCorpseBones();
+                 context->GetValue<Unit*>("current target")->Set(nullptr);
+                 bot->SetTarget();
+-                botAI->TellMaster("Hello");
++                botAI->TellMaster("Sveiki");
+ 
+                 if (dCount > 20)
+                     context->GetValue<uint32>("death count")->Set(0);
+diff --git a/src/strategy/actions/RewardAction.cpp b/src/strategy/actions/RewardAction.cpp
+index fd5e6ae3..d73faf03 100644
+--- a/src/strategy/actions/RewardAction.cpp
++++ b/src/strategy/actions/RewardAction.cpp
+@@ -39,7 +39,7 @@ bool RewardAction::Execute(Event event)
+     if (mtar && Reward(itemId, mtar))
+         return true;
+ 
+-    botAI->TellError("Cannot talk to quest giver");
++    botAI->TellError("Negaliu kalbėtis su užduoties davėju");
+     return false;
+ }
+ 
+diff --git a/src/strategy/actions/RpgSubActions.cpp b/src/strategy/actions/RpgSubActions.cpp
+index ac84ed2b..12fc8351 100644
+--- a/src/strategy/actions/RpgSubActions.cpp
++++ b/src/strategy/actions/RpgSubActions.cpp
+@@ -371,10 +371,10 @@ bool RpgTradeUsefulAction::Execute(Event event)
+         {
+             if (bot->GetGroup() && bot->GetGroup()->IsMember(guidP) && botAI->HasRealPlayerMaster())
+                 botAI->TellMasterNoFacing(
+-                    "You can use this " + chat->FormatItem(item->GetTemplate()) + " better than me, " +
++                    "Šį daiktą gali panaudoti " + chat->FormatItem(item->GetTemplate()) + " geriau už mane, " +
+                     guidP.GetPlayer()->GetName() /*chat->FormatWorldobject(guidP.GetPlayer())*/ + ".");
+             else
+-                bot->Say("You can use this " + chat->FormatItem(item->GetTemplate()) + " better than me, " +
++                bot->Say("Šį daiktą gali panaudoti" + chat->FormatItem(item->GetTemplate()) + " geriau už mane," +
+                              player->GetName() /*chat->FormatWorldobject(player)*/ + ".",
+                          (bot->GetTeamId() == TEAM_ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+ 
+@@ -389,7 +389,7 @@ bool RpgTradeUsefulAction::Execute(Event event)
+             }
+         }
+         else
+-            bot->Say("Start trade with" + chat->FormatWorldobject(player),
++            bot->Say("Pradedu prekybą su" + chat->FormatWorldobject(player),
+                      (bot->GetTeamId() == TEAM_ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+ 
+         botAI->SetNextCheckDelay(sPlayerbotAIConfig->rpgDelay);
+diff --git a/src/strategy/actions/RtscAction.cpp b/src/strategy/actions/RtscAction.cpp
+index 7d096ea5..d396fe6c 100644
+--- a/src/strategy/actions/RtscAction.cpp
++++ b/src/strategy/actions/RtscAction.cpp
+@@ -20,15 +20,15 @@ bool RTSCAction::Execute(Event event)
+     if (command != "reset" && !master->HasSpell(RTSC_MOVE_SPELL))
+     {
+         master->learnSpell(RTSC_MOVE_SPELL, false);
+-        botAI->TellMasterNoFacing("RTS control enabled.");
+-        botAI->TellMasterNoFacing("Aedm (Awesome energetic do move) spell trained.");
++        botAI->TellMasterNoFacing("RTS valdymas įjungtas.");
++        botAI->TellMasterNoFacing("Išmokytas Aedm (Nuostabus energingas judėjimas) burtas.");
+     }
+     else if (command == "reset")
+     {
+         if (master->HasSpell(RTSC_MOVE_SPELL))
+         {
+             master->removeSpell(RTSC_MOVE_SPELL, SPEC_MASK_ALL, false);
+-            botAI->TellMasterNoFacing("RTS control spell removed.");
++            botAI->TellMasterNoFacing("RTS valdymo burtas pašalintas.");
+         }
+ 
+         RESET_AI_VALUE(bool, "RTSC selected");
+diff --git a/src/strategy/actions/SecurityCheckAction.cpp b/src/strategy/actions/SecurityCheckAction.cpp
+index afd0f9d1..e3226dd9 100644
+--- a/src/strategy/actions/SecurityCheckAction.cpp
++++ b/src/strategy/actions/SecurityCheckAction.cpp
+@@ -25,7 +25,7 @@ bool SecurityCheckAction::Execute(Event event)
+             if ((botAI->GetGroupMaster()->GetSession()->GetSecurity() == SEC_PLAYER) &&
+                 (!bot->GetGuildId() || bot->GetGuildId() != botAI->GetGroupMaster()->GetGuildId()))
+             {
+-                botAI->TellError("I will play with this loot type only if I'm in your guild :/");
++                botAI->TellError("Su šiuo grobio tipu žaisiu tik jei būsiu tavo gildijoje :/");
+                 botAI->ChangeStrategy("+passive,+stay", BOT_STATE_NON_COMBAT);
+                 botAI->ChangeStrategy("+passive,+stay", BOT_STATE_COMBAT);
+             }
+diff --git a/src/strategy/actions/SellAction.cpp b/src/strategy/actions/SellAction.cpp
+index ea8021ab..e91e4fe3 100644
+--- a/src/strategy/actions/SellAction.cpp
++++ b/src/strategy/actions/SellAction.cpp
+@@ -83,7 +83,7 @@ bool SellAction::Execute(Event event)
+         return true;
+     }
+ 
+-    botAI->TellError("Usage: s gray/*/vendor/[item link]");
++    botAI->TellError("Naudojimas: s gray/*/vendor/[daikto nuoroda]");
+     return false;
+ }
+ 
+diff --git a/src/strategy/actions/SendMailAction.cpp b/src/strategy/actions/SendMailAction.cpp
+index f28c0545..a530fd80 100644
+--- a/src/strategy/actions/SendMailAction.cpp
++++ b/src/strategy/actions/SendMailAction.cpp
+@@ -53,14 +53,14 @@ bool SendMailAction::Execute(Event event)
+ 
+     if (!mailboxFound && !randomBot)
+     {
+-        bot->Whisper("There is no mailbox nearby", LANG_UNIVERSAL, tellTo);
++        bot->Whisper("Netoliese nėra pašto dėžutės", LANG_UNIVERSAL, tellTo);
+         return false;
+     }
+ 
+     ItemIds ids = chat->parseItems(text);
+     if (ids.size() > 1)
+     {
+-        bot->Whisper("You can not request more than one item", LANG_UNIVERSAL, tellTo);
++        bot->Whisper("Negali prašyti daugiau nei vieno daikto", LANG_UNIVERSAL, tellTo);
+         return false;
+     }
+ 
+@@ -72,13 +72,13 @@ bool SendMailAction::Execute(Event event)
+ 
+         if (randomBot)
+         {
+-            bot->Whisper("I cannot send money", LANG_UNIVERSAL, tellTo);
++            bot->Whisper("Negaliu siųsti pinigų", LANG_UNIVERSAL, tellTo);
+             return false;
+         }
+ 
+         if (bot->GetMoney() < money)
+         {
+-            botAI->TellError("I don't have enough money");
++            botAI->TellError("Neturiu pakankamai pinigų");
+             return false;
+         }
+ 
+diff --git a/src/strategy/actions/SetCraftAction.cpp b/src/strategy/actions/SetCraftAction.cpp
+index d514c7f4..cf66ec01 100644
+--- a/src/strategy/actions/SetCraftAction.cpp
++++ b/src/strategy/actions/SetCraftAction.cpp
+@@ -24,7 +24,7 @@ bool SetCraftAction::Execute(Event event)
+     if (link == "reset")
+     {
+         data.Reset();
+-        botAI->TellMaster("I will not craft anything");
++        botAI->TellMaster("Nieko negaminsiu");
+         return true;
+     }
+ 
+@@ -37,7 +37,7 @@ bool SetCraftAction::Execute(Event event)
+     ItemIds itemIds = chat->parseItems(link);
+     if (itemIds.empty())
+     {
+-        botAI->TellMaster("Usage: 'craft [itemId]' or 'craft reset'");
++        botAI->TellMaster("Naudojimas: „craft [daikto ID]“ arba „craft reset“");
+         return false;
+     }
+ 
+@@ -97,7 +97,7 @@ bool SetCraftAction::Execute(Event event)
+ 
+     if (data.required.empty())
+     {
+-        botAI->TellMaster("I cannot craft this");
++        botAI->TellMaster("Negaliu to pagaminti");
+         return false;
+     }
+ 
+@@ -112,7 +112,7 @@ void SetCraftAction::TellCraft()
+     CraftData& data = AI_VALUE(CraftData&, "craft");
+     if (data.IsEmpty())
+     {
+-        botAI->TellMaster("I will not craft anything");
++        botAI->TellMaster("Nieko negaminsiu");
+         return;
+     }
+ 
+diff --git a/src/strategy/actions/SetHomeAction.cpp b/src/strategy/actions/SetHomeAction.cpp
+index 0da185d4..20ad927c 100644
+--- a/src/strategy/actions/SetHomeAction.cpp
++++ b/src/strategy/actions/SetHomeAction.cpp
+@@ -30,14 +30,14 @@ bool SetHomeAction::Execute(Event event)
+             {
+                 Creature* creature = botAI->GetCreature(selection);
+                 bot->GetSession()->SendBindPoint(creature);
+-                botAI->TellMaster("This inn is my new home");
++                botAI->TellMaster("Ši užeiga – mano naujieji namai");
+                 return true;
+             }
+             else
+             {
+                 Creature* creature = botAI->GetCreature(selection);
+                 bot->GetSession()->SendBindPoint(creature);
+-                botAI->TellMaster("This inn is my new home");
++                botAI->TellMaster("Ši užeiga – mano naujieji namai");
+                 return true;
+             }
+         }
+@@ -50,10 +50,10 @@ bool SetHomeAction::Execute(Event event)
+             continue;
+ 
+         bot->GetSession()->SendBindPoint(unit);
+-        botAI->TellMaster("This inn is my new home");
++        botAI->TellMaster("Ši užeiga – mano naujieji namai");
+         return true;
+     }
+ 
+-    botAI->TellError("Can't find any innkeeper around");
++    botAI->TellError("Aplink nerandu smuklininko");
+     return false;
+ }
+diff --git a/src/strategy/actions/ShareQuestAction.cpp b/src/strategy/actions/ShareQuestAction.cpp
+index 77ff51b0..652c837c 100644
+--- a/src/strategy/actions/ShareQuestAction.cpp
++++ b/src/strategy/actions/ShareQuestAction.cpp
+@@ -32,7 +32,7 @@ bool ShareQuestAction::Execute(Event event)
+             WorldPacket p;
+             p << entry;
+             bot->GetSession()->HandlePushQuestToParty(p);
+-            botAI->TellMaster("Quest shared");
++            botAI->TellMaster("Užduotis pasidalinta");
+             return true;
+         }
+     }
+@@ -99,7 +99,7 @@ bool AutoShareQuestAction::Execute(Event event)
+         WorldPacket p;
+         p << logQuest;
+         bot->GetSession()->HandlePushQuestToParty(p);
+-        botAI->TellMaster("Quest shared");
++        botAI->TellMaster("Užduotis pasidalinta");
+         shared = true;
+     }
+ 
+diff --git a/src/strategy/actions/SkipSpellsListAction.cpp b/src/strategy/actions/SkipSpellsListAction.cpp
+index 2221731d..91063564 100644
+--- a/src/strategy/actions/SkipSpellsListAction.cpp
++++ b/src/strategy/actions/SkipSpellsListAction.cpp
+@@ -30,7 +30,7 @@ bool SkipSpellsListAction::Execute(Event event)
+     if (cmd == "reset")
+     {
+         skipSpells.clear();
+-        botAI->TellMaster("Ignored spell list is empty");
++        botAI->TellMaster("Ignoruojamų burtų sąrašas tuščias");
+         return true;
+     }
+ 
+@@ -39,7 +39,7 @@ bool SkipSpellsListAction::Execute(Event event)
+         std::ostringstream out;
+         if (skipSpells.empty())
+         {
+-            botAI->TellMaster("Ignored spell list is empty");
++            botAI->TellMaster("Ignoruojamų burtų sąrašas tuščias");
+             return true;
+         }
+ 
+@@ -71,7 +71,7 @@ bool SkipSpellsListAction::Execute(Event event)
+         uint32 spellId = chat->parseSpell(cmd);
+         if (!spellId)
+         {
+-            botAI->TellError("Unknown spell");
++            botAI->TellError("Nežinomas burtas");
+             return false;
+         }
+ 
+diff --git a/src/strategy/actions/TalkToQuestGiverAction.cpp b/src/strategy/actions/TalkToQuestGiverAction.cpp
+index 93f85d91..eae0c99a 100644
+--- a/src/strategy/actions/TalkToQuestGiverAction.cpp
++++ b/src/strategy/actions/TalkToQuestGiverAction.cpp
+@@ -92,7 +92,7 @@ bool TalkToQuestGiverAction::TurnInQuest(Quest const* quest, Object* questGiver,
+         const Quest* pQuest = sObjectMgr->GetQuestTemplate(questID);
+         const std::string text_quest = ChatHelper::FormatQuest(pQuest);
+         LOG_INFO("playerbots", "{} => Quest [ {} ] completed", bot->GetName(), pQuest->GetTitle());
+-        bot->Say("Quest [ " + text_quest + " ] completed", LANG_UNIVERSAL);
++        bot->Say("Užduotis [" + text_quest + " ] įvykdyta", LANG_UNIVERSAL);
+     }
+ 
+     return true;
+diff --git a/src/strategy/actions/TameAction.cpp b/src/strategy/actions/TameAction.cpp
+index 8446c24c..a2bd4562 100644
+--- a/src/strategy/actions/TameAction.cpp
++++ b/src/strategy/actions/TameAction.cpp
+@@ -126,7 +126,7 @@ bool TameAction::Execute(Event event)
+         }
+         catch (...)
+         {
+-            botAI->TellError("Invalid tame id.");
++            botAI->TellError("Neteisingas prijaukinimo ID.");
+         }
+     }
+     else if (mode == "family" && !value.empty())
+@@ -141,7 +141,7 @@ bool TameAction::Execute(Event event)
+     {
+         // Unrecognized command or missing argument; show usage
+         botAI->TellError(
+-            "Usage: tame name <name> | tame id <id> | tame family <family> | tame rename <new name> | tame abandon");
++            "Naudojimas: tame name <vardas> | tame id <id> | tame family <šeima> | tame rename <naujas vardas> | tame abandon");
+         return false;
+     }
+ 
+@@ -165,7 +165,7 @@ bool TameAction::Execute(Event event)
+         }
+         else
+         {
+-            botAI->TellMaster("Pet changed and initialized!");
++            botAI->TellMaster("Augintinis pakeistas ir paruoštas!");
+         }
+     }
+ 
+@@ -200,7 +200,7 @@ bool TameAction::SetPetByName(const std::string& name)
+             // If the creature is exotic and the bot doesn't have Beast Mastery, show error and fail
+             if (IsExoticPet(&creature) && !HasBeastMastery(bot))
+             {
+-                botAI->TellError("I cannot use exotic pets unless I have the Beast Mastery talent.");
++                botAI->TellError("Negaliu naudoti egzotinių augintinių, jei neturiu Žvėrių valdymo talento.");
+                 return false;
+             }
+ 
+@@ -217,7 +217,7 @@ bool TameAction::SetPetByName(const std::string& name)
+     }
+ 
+     // If no suitable pet found, show an error and return failure
+-    botAI->TellError("No tameable pet found with name: " + name);
++    botAI->TellError("Prijaukinamo augintinio tokiu vardu nerasta:" + name);
+     return false;
+ }
+ 
+@@ -234,21 +234,21 @@ bool TameAction::SetPetById(uint32 id)
+         if (!creature->IsTameable(true))
+         {
+             // If not tameable at all, show an error and fail
+-            botAI->TellError("No tameable pet found with id: " + std::to_string(id));
++            botAI->TellError("Prijaukinamo augintinio tokiu ID nerasta:" + std::to_string(id));
+             return false;
+         }
+ 
+         // If it's an exotic pet, make sure the bot has the Beast Mastery talent
+         if (IsExoticPet(creature) && !HasBeastMastery(bot))
+         {
+-            botAI->TellError("I cannot use exotic pets unless I have the Beast Mastery talent.");
++            botAI->TellError("Negaliu naudoti egzotinių augintinių, jei neturiu Žvėrių valdymo talento.");
+             return false;
+         }
+ 
+         // Check if the bot is actually allowed to tame this pet (honoring exotic pet rules)
+         if (!creature->IsTameable(bot->CanTameExoticPets()))
+         {
+-            botAI->TellError("No tameable pet found with id: " + std::to_string(id));
++            botAI->TellError("Prijaukinamo augintinio tokiu ID nerasta:" + std::to_string(id));
+             return false;
+         }
+ 
+@@ -260,7 +260,7 @@ bool TameAction::SetPetById(uint32 id)
+     }
+ 
+     // If no valid creature was found by id, show an error
+-    botAI->TellError("No tameable pet found with id: " + std::to_string(id));
++    botAI->TellError("Prijaukinamo augintinio tokiu ID nerasta:" + std::to_string(id));
+     return false;
+ }
+ 
+@@ -318,9 +318,9 @@ bool TameAction::SetPetByFamily(const std::string& family)
+     if (candidates.empty())
+     {
+         if (foundExotic && !HasBeastMastery(bot))
+-            botAI->TellError("I cannot use exotic pets unless I have the Beast Mastery talent.");
++            botAI->TellError("Negaliu naudoti egzotinių augintinių, jei neturiu Žvėrių valdymo talento.");
+         else
+-            botAI->TellError("No tameable pet found with family: " + family);
++            botAI->TellError("Prijaukinamo augintinio tokia šeima nerasta:" + family);
+         return false;
+     }
+ 
+@@ -345,14 +345,14 @@ bool TameAction::RenamePet(const std::string& newName)
+     // Check if the bot currently has a pet
+     if (!pet)
+     {
+-        botAI->TellError("You have no pet to rename.");
++        botAI->TellError("Neturi augintinio, kurį galėtum pervadinti.");
+         return false;
+     }
+ 
+     // Validate the new name: must not be empty and max 12 characters
+     if (newName.empty() || newName.length() > 12)
+     {
+-        botAI->TellError("Pet name must be between 1 and 12 alphabetic characters.");
++        botAI->TellError("Augintinio vardas turi būti sudarytas iš 1–12 raidžių.");
+         return false;
+     }
+ 
+@@ -361,7 +361,7 @@ bool TameAction::RenamePet(const std::string& newName)
+     {
+         if (!std::isalpha(static_cast<unsigned char>(c)))
+         {
+-            botAI->TellError("Pet name must only contain alphabetic characters (A-Z, a-z).");
++            botAI->TellError("Augintinio varde gali būti tik raidės (A-Z, a-z).");
+             return false;
+         }
+     }
+@@ -375,7 +375,7 @@ bool TameAction::RenamePet(const std::string& newName)
+     // Check if the new name is reserved or forbidden
+     if (sObjectMgr->IsReservedName(normalized))
+     {
+-        botAI->TellError("That pet name is forbidden. Please choose another name.");
++        botAI->TellError("Šis augintinio vardas draudžiamas. Pasirink kitą.");
+         return false;
+     }
+ 
+@@ -385,8 +385,8 @@ bool TameAction::RenamePet(const std::string& newName)
+     bot->GetSession()->SendPetNameQuery(pet->GetGUID(), pet->GetEntry());
+ 
+     // Notify the master about the rename and give a tip to update the client name display
+-    botAI->TellMaster("Your pet has been renamed to " + normalized + "!");
+-    botAI->TellMaster("If you do not see the new name, please dismiss and recall your pet.");
++    botAI->TellMaster("Tavo augintinis pervadintas į" + normalized + "!");
++    botAI->TellMaster("Jei nematai naujo vardo, atleisk ir vėl pasišauk augintinį.");
+ 
+     // Remove the current pet and (re-)cast Call Pet spell if the bot is a hunter
+     bot->RemovePet(nullptr, PET_SAVE_AS_CURRENT, true);
+@@ -404,7 +404,7 @@ bool TameAction::CreateAndSetPet(uint32 creatureEntry)
+     // Ensure the player is a hunter and at least level 10 (required for pets)
+     if (bot->getClass() != CLASS_HUNTER || bot->GetLevel() < 10)
+     {
+-        botAI->TellError("Only level 10+ hunters can have pets.");
++        botAI->TellError("Augintinių gali turėti tik 10+ lygio medžiotojai.");
+         return false;
+     }
+ 
+@@ -412,7 +412,7 @@ bool TameAction::CreateAndSetPet(uint32 creatureEntry)
+     CreatureTemplate const* creature = sObjectMgr->GetCreatureTemplate(creatureEntry);
+     if (!creature)
+     {
+-        botAI->TellError("Creature template not found.");
++        botAI->TellError("Būtybės šablono nerasta.");
+         return false;
+     }
+ 
+@@ -433,7 +433,7 @@ bool TameAction::CreateAndSetPet(uint32 creatureEntry)
+     Pet* pet = bot->CreateTamedPetFrom(creatureEntry, 0);
+     if (!pet)
+     {
+-        botAI->TellError("Failed to create pet.");
++        botAI->TellError("Nepavyko sukurti augintinio.");
+         return false;
+     }
+ 
+@@ -488,13 +488,13 @@ bool TameAction::AbandonPet()
+         // Remove the pet from the bot and mark it as deleted in the database
+         bot->RemovePet(pet, PET_SAVE_AS_DELETED);
+         // Inform the bot's master/player that the pet was abandoned
+-        botAI->TellMaster("Your pet has been abandoned.");
++        botAI->TellMaster("Tavo augintinis paliktas.");
+         return true;
+     }
+     else
+     {
+         // If there is no hunter pet, show an error message
+-        botAI->TellError("You have no hunter pet to abandon.");
++        botAI->TellError("Neturi medžiotojo augintinio, kurį galėtum palikti.");
+         return false;
+     }
+ }
+diff --git a/src/strategy/actions/TaxiAction.cpp b/src/strategy/actions/TaxiAction.cpp
+index 91a42c4b..04ce85c3 100644
+--- a/src/strategy/actions/TaxiAction.cpp
++++ b/src/strategy/actions/TaxiAction.cpp
+@@ -24,7 +24,7 @@ bool TaxiAction::Execute(Event event)
+     {
+         movement.taxiNodes.clear();
+         movement.Set(nullptr);
+-        botAI->TellMaster("I am ready for the next flight");
++        botAI->TellMaster("Kitam skrydžiui viskas paruošta");
+         return true;
+     }
+ 
+@@ -82,7 +82,7 @@ bool TaxiAction::Execute(Event event)
+ 
+         if (param == "?")
+         {
+-            botAI->TellMasterNoFacing("=== Taxi ===");
++            botAI->TellMasterNoFacing("=== Skraidinimas ===");
+ 
+             uint32 index = 1;
+             for (uint32 node : nodes)
+@@ -118,13 +118,13 @@ bool TaxiAction::Execute(Event event)
+         {
+             movement.taxiNodes.clear();
+             movement.Set(nullptr);
+-            botAI->TellError("I can't fly with you");
++            botAI->TellError("Negaliu skristi kartu su tavimi");
+             return false;
+         }
+ 
+         return true;
+     }
+ 
+-    botAI->TellError("Cannot find any flightmaster to talk");
++    botAI->TellError("Nerandu skrydžių meistro pasikalbėti");
+     return false;
+ }
+diff --git a/src/strategy/actions/TeleportAction.cpp b/src/strategy/actions/TeleportAction.cpp
+index 977c7ae5..a90fc5fa 100644
+--- a/src/strategy/actions/TeleportAction.cpp
++++ b/src/strategy/actions/TeleportAction.cpp
+@@ -106,6 +106,6 @@ bool TeleportAction::Execute(Event event)
+     }
+ 
+     // If no teleport option is found
+-    botAI->TellError("Cannot find any portal to teleport");
++    botAI->TellError("Nerandu portalo teleportacijai");
+     return false;
+ }
+diff --git a/src/strategy/actions/TellGlyphsAction.cpp b/src/strategy/actions/TellGlyphsAction.cpp
+index 3f48dbd8..54350844 100644
+--- a/src/strategy/actions/TellGlyphsAction.cpp
++++ b/src/strategy/actions/TellGlyphsAction.cpp
+@@ -105,7 +105,7 @@ bool TellGlyphsAction::Execute(Event event)
+     // 4. Send chat messages
+     //-----------------------------------------------------------------
+     if (first)                                       // no glyphs
+-        botAI->TellMaster("No glyphs equipped");
++        botAI->TellMaster("Nėra užsidėtų glifų");
+     else
+         botAI->TellMaster(std::string("Glyphs: ") + list.str());
+ 
+diff --git a/src/strategy/actions/TellItemCountAction.cpp b/src/strategy/actions/TellItemCountAction.cpp
+index cf55da1d..9c74b20b 100644
+--- a/src/strategy/actions/TellItemCountAction.cpp
++++ b/src/strategy/actions/TellItemCountAction.cpp
+@@ -23,7 +23,7 @@ bool TellItemCountAction::Execute(Event event)
+         soulbound[proto->ItemId] = item->IsSoulBound();
+     }
+ 
+-    botAI->TellMaster("=== Inventory ===");
++    botAI->TellMaster("=== Inventorius ===");
+     for (std::map<uint32, uint32>::iterator i = itemMap.begin(); i != itemMap.end(); ++i)
+     {
+         ItemTemplate const* proto = sObjectMgr->GetItemTemplate(i->first);
+diff --git a/src/strategy/actions/TellLosAction.cpp b/src/strategy/actions/TellLosAction.cpp
+index 125b7df4..2de18eb9 100644
+--- a/src/strategy/actions/TellLosAction.cpp
++++ b/src/strategy/actions/TellLosAction.cpp
+@@ -79,7 +79,7 @@ void TellLosAction::ListGameObjects(std::string const title, GuidVector gos)
+ 
+ bool TellAuraAction::Execute(Event event)
+ {
+-    botAI->TellMaster("--- Auras ---");
++    botAI->TellMaster("--- Aurų ---");
+     sLog->outMessage("playerbot", LOG_LEVEL_DEBUG, "--- Auras ---");
+     Unit::AuraApplicationMap& map = bot->GetAppliedAuras();
+     for (Unit::AuraApplicationMap::iterator i = map.begin(); i != map.end(); ++i)
+@@ -106,7 +106,7 @@ bool TellAuraAction::Execute(Event event)
+                              " isArea: " + std::to_string(is_area) + " duration: " + std::to_string(duration) +
+                              " spellId: " + std::to_string(spellId) + " isPositive: " + std::to_string(isPositive));
+ 
+-        botAI->TellMaster("Info of Aura - name: " + auraName + " caster: " + caster_name + " type: " +
++        botAI->TellMaster("Informacija apie auros vardą:" + auraName + " caster: " + caster_name + " type: " +
+                           std::to_string(type) + " owner: " + owner_name + " distance: " + std::to_string(distance) +
+                           " isArea: " + std::to_string(is_area) + " duration: " + std::to_string(duration) +
+                           " spellId: " + std::to_string(spellId) + " isPositive: " + std::to_string(isPositive));
+@@ -133,7 +133,7 @@ bool TellAuraAction::Execute(Event event)
+ bool TellEstimatedDpsAction::Execute(Event event)
+ {
+     float dps = AI_VALUE(float, "estimated group dps");
+-    botAI->TellMaster("Estimated Group DPS: " + std::to_string(dps));
++    botAI->TellMaster("Numatoma grupės žala per sekundę:" + std::to_string(dps));
+     return true;
+ }
+ 
+diff --git a/src/strategy/actions/TellMasterAction.cpp b/src/strategy/actions/TellMasterAction.cpp
+index 10c01c0c..8b31a7ba 100644
+--- a/src/strategy/actions/TellMasterAction.cpp
++++ b/src/strategy/actions/TellMasterAction.cpp
+@@ -16,7 +16,7 @@ bool TellMasterAction::Execute(Event event)
+ 
+ bool OutOfReactRangeAction::Execute(Event event)
+ {
+-    botAI->TellMaster("Wait for me!");
++    botAI->TellMaster("Palauk manęs!");
+     return true;
+ }
+ 
+diff --git a/src/strategy/actions/TellTargetAction.cpp b/src/strategy/actions/TellTargetAction.cpp
+index f6f05639..f71404c9 100644
+--- a/src/strategy/actions/TellTargetAction.cpp
++++ b/src/strategy/actions/TellTargetAction.cpp
+@@ -26,7 +26,7 @@ bool TellTargetAction::Execute(Event event)
+ 
+ bool TellAttackersAction::Execute(Event event)
+ {
+-    botAI->TellMaster("--- Attackers ---");
++    botAI->TellMaster("--- Puolėjai ---");
+ 
+     GuidVector attackers = context->GetValue<GuidVector>("attackers")->Get();
+     int32 count = 0;
+@@ -39,7 +39,7 @@ bool TellAttackersAction::Execute(Event event)
+         botAI->TellMaster(std::to_string(++count) + std::string(".") + unit->GetName());
+     }
+ 
+-    botAI->TellMaster("--- Threat ---");
++    botAI->TellMaster("--- Grėsmė ---");
+ 
+     HostileReference* ref = bot->getHostileRefMgr().getFirst();
+     if (!ref)
+diff --git a/src/strategy/actions/TradeStatusAction.cpp b/src/strategy/actions/TradeStatusAction.cpp
+index f401e7eb..c9f77abe 100644
+--- a/src/strategy/actions/TradeStatusAction.cpp
++++ b/src/strategy/actions/TradeStatusAction.cpp
+@@ -28,13 +28,13 @@ bool TradeStatusAction::Execute(Event event)
+     // Allow the master and group members to trade
+     if (trader != master && !traderBotAI && (!bot->GetGroup() || !bot->GetGroup()->IsMember(trader->GetGUID())))
+     {
+-        bot->Whisper("I'm kind of busy now", LANG_UNIVERSAL, trader);
++        bot->Whisper("Dabar turiu darbo", LANG_UNIVERSAL, trader);
+         return false;
+     }
+ 
+     if (sPlayerbotAIConfig->enableRandomBotTrading == 0 && (sRandomPlayerbotMgr->IsRandomBot(bot)|| sRandomPlayerbotMgr->IsAddclassBot(bot)))
+     {
+-        bot->Whisper("Trading is disabled", LANG_UNIVERSAL, trader);
++        bot->Whisper("Prekyba išjungta", LANG_UNIVERSAL, trader);
+         return false;
+     }
+ 
+@@ -138,7 +138,7 @@ void TradeStatusAction::BeginTrade()
+     ListItemsVisitor visitor;
+     IterateItems(&visitor);
+ 
+-    botAI->TellMaster("=== Inventory ===");
++    botAI->TellMaster("=== Inventorius ===");
+     TellItems(visitor.items, visitor.soulbound);
+ 
+     if (sRandomPlayerbotMgr->IsRandomBot(bot))
+@@ -186,9 +186,9 @@ bool TradeStatusAction::CheckTrade()
+         {
+             if (bot->GetGroup() && bot->GetGroup()->IsMember(bot->GetTrader()->GetGUID()) &&
+                 botAI->HasRealPlayerMaster())
+-                botAI->TellMasterNoFacing("Thank you " + chat->FormatWorldobject(bot->GetTrader()));
++                botAI->TellMasterNoFacing("Ačiū" + chat->FormatWorldobject(bot->GetTrader()));
+             else
+-                bot->Say("Thank you " + chat->FormatWorldobject(bot->GetTrader()),
++                bot->Say("Ačiū" + chat->FormatWorldobject(bot->GetTrader()),
+                          (bot->GetTeamId() == TEAM_ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+         }
+         return isGettingItem;
+@@ -216,12 +216,12 @@ bool TradeStatusAction::CheckTrade()
+     int32 playerMoney = trader->GetTradeData()->GetMoney() + playerItemsMoney;
+     if (botItemsMoney > 0 && sPlayerbotAIConfig->enableRandomBotTrading == 2 && (sRandomPlayerbotMgr->IsRandomBot(bot)|| sRandomPlayerbotMgr->IsAddclassBot(bot)))
+     {
+-        bot->Whisper("Selling is disabled.", LANG_UNIVERSAL, trader);
++        bot->Whisper("Pardavinėjimas išjungtas.", LANG_UNIVERSAL, trader);
+         return false;
+     }
+     if (playerItemsMoney && sPlayerbotAIConfig->enableRandomBotTrading == 3 && (sRandomPlayerbotMgr->IsRandomBot(bot)|| sRandomPlayerbotMgr->IsAddclassBot(bot)))
+     {
+-        bot->Whisper("Buying is disabled.", LANG_UNIVERSAL, trader);
++        bot->Whisper("Pirkimas išjungtas.", LANG_UNIVERSAL, trader);
+         return false;
+     }
+     for (uint32 slot = 0; slot < TRADE_SLOT_TRADED_COUNT; ++slot)
+@@ -258,7 +258,7 @@ bool TradeStatusAction::CheckTrade()
+ 
+     if (!botItemsMoney && !playerItemsMoney)
+     {
+-        botAI->TellError("There are no items to trade");
++        botAI->TellError("Nėra daiktų prekybai");
+         return false;
+     }
+ 
+@@ -272,7 +272,7 @@ bool TradeStatusAction::CheckTrade()
+         {
+             if (moneyDelta < 0)
+             {
+-                botAI->TellError("You can use discount to buy items only");
++                botAI->TellError("Nuolaidą gali naudoti tik daiktams pirkti");
+                 botAI->PlaySound(TEXT_EMOTE_NO);
+                 return false;
+             }
+@@ -291,16 +291,16 @@ bool TradeStatusAction::CheckTrade()
+         switch (urand(0, 4))
+         {
+             case 0:
+-                botAI->TellMaster("A pleasure doing business with you");
++                botAI->TellMaster("Malonu su tavimi verslauti");
+                 break;
+             case 1:
+-                botAI->TellMaster("Fair trade");
++                botAI->TellMaster("Sąžininga prekyba");
+                 break;
+             case 2:
+-                botAI->TellMaster("Thanks");
++                botAI->TellMaster("Ačiū");
+                 break;
+             case 3:
+-                botAI->TellMaster("Off with you");
++                botAI->TellMaster("Eik sau");
+                 break;
+         }
+ 
+diff --git a/src/strategy/actions/TradeStatusExtendedAction.cpp b/src/strategy/actions/TradeStatusExtendedAction.cpp
+index ada779e3..72572f65 100644
+--- a/src/strategy/actions/TradeStatusExtendedAction.cpp
++++ b/src/strategy/actions/TradeStatusExtendedAction.cpp
+@@ -75,7 +75,7 @@ bool TradeStatusExtendedAction::Execute(Event event)
+             }
+             else
+             {
+-                botAI->TellMaster("I can't unlock this item.");
++                botAI->TellMaster("Negaliu atrakinti šio daikto.");
+             }
+         }
+     }
+diff --git a/src/strategy/actions/TrainerAction.cpp b/src/strategy/actions/TrainerAction.cpp
+index 655208bf..4eab4da3 100644
+--- a/src/strategy/actions/TrainerAction.cpp
++++ b/src/strategy/actions/TrainerAction.cpp
+@@ -114,7 +114,7 @@ bool TrainerAction::Execute(Event event)
+ 
+     if (!creature->IsValidTrainerForPlayer(bot))
+     {
+-        botAI->TellError("This trainer cannot teach me");
++        botAI->TellError("Šis treneris negali manęs mokyti");
+         return false;
+     }
+ 
+@@ -122,7 +122,7 @@ bool TrainerAction::Execute(Event event)
+     TrainerSpellData const* cSpells = creature->GetTrainerSpells();
+     if (!cSpells)
+     {
+-        botAI->TellError("No spells can be learned from this trainer");
++        botAI->TellError("Iš šio trenerio negalima išmokti jokių burtų");
+         return false;
+     }
+ 
+@@ -164,11 +164,11 @@ bool MaintenanceAction::Execute(Event event)
+ {
+     if (!sPlayerbotAIConfig->maintenanceCommand)
+     {
+-        botAI->TellError("maintenance command is not allowed, please check the configuration.");
++        botAI->TellError("priežiūros komanda neleidžiama, patikrink konfigūraciją.");
+         return false;
+     }
+ 
+-    botAI->TellMaster("I'm maintaining");
++    botAI->TellMaster("Atlieku priežiūrą");
+     PlayerbotFactory factory(bot, bot->GetLevel());
+     factory.InitAttunementQuests();
+     factory.InitBags(false);
+@@ -211,18 +211,18 @@ bool AutoGearAction::Execute(Event event)
+ {
+     if (!sPlayerbotAIConfig->autoGearCommand)
+     {
+-        botAI->TellError("autogear command is not allowed, please check the configuration.");
++        botAI->TellError("autogear komanda neleidžiama, patikrink konfigūraciją.");
+         return false;
+     }
+ 
+     if (!sPlayerbotAIConfig->autoGearCommandAltBots &&
+         !sPlayerbotAIConfig->IsInRandomAccountList(bot->GetSession()->GetAccountId()))
+     {
+-        botAI->TellError("You cannot use autogear on alt bots.");
++        botAI->TellError("Negali naudoti autogear papildomiems robotams.");
+         return false;
+     }
+ 
+-    botAI->TellMaster("I'm auto gearing");
++    botAI->TellMaster("Automatiškai ruošiu įrangą");
+     uint32 gs = sPlayerbotAIConfig->autoGearScoreLimit == 0
+                     ? 0
+                     : PlayerbotFactory::CalcMixedGearScore(sPlayerbotAIConfig->autoGearScoreLimit,
+diff --git a/src/strategy/actions/UnlockItemAction.cpp b/src/strategy/actions/UnlockItemAction.cpp
+index 367a4fcb..611ad054 100644
+--- a/src/strategy/actions/UnlockItemAction.cpp
++++ b/src/strategy/actions/UnlockItemAction.cpp
+@@ -33,6 +33,6 @@ void UnlockItemAction::UnlockItem(Item* item)
+     }
+     else
+     {
+-        botAI->TellError("Failed to cast Pick Lock.");
++        botAI->TellError("Nepavyko panaudoti Spynų atrakinimo.");
+     }
+ }
+diff --git a/src/strategy/actions/UnlockTradedItemAction.cpp b/src/strategy/actions/UnlockTradedItemAction.cpp
+index 22d9c145..809bd3e3 100644
+--- a/src/strategy/actions/UnlockTradedItemAction.cpp
++++ b/src/strategy/actions/UnlockTradedItemAction.cpp
+@@ -18,13 +18,13 @@ bool UnlockTradedItemAction::Execute(Event event)
+     Item* lockbox = tradeData->GetItem(TRADE_SLOT_NONTRADED);
+     if (!lockbox)
+     {
+-        botAI->TellError("No item in the Do Not Trade slot.");
++        botAI->TellError("Nėra daikto „Neprekiauti“ lizde.");
+         return false;
+     }
+ 
+     if (!CanUnlockItem(lockbox))
+     {
+-        botAI->TellError("Cannot unlock this item.");
++        botAI->TellError("Negalima atrakinti šio daikto.");
+         return false;
+     }
+ 
+@@ -80,7 +80,7 @@ void UnlockTradedItemAction::UnlockItem(Item* item)
+ {
+     if (!bot->HasSpell(PICK_LOCK_SPELL_ID))
+     {
+-        botAI->TellError("Cannot unlock, Pick Lock spell is missing.");
++        botAI->TellError("Negalima atrakinti – trūksta Spynų atrakinimo burto.");
+         return;
+     }
+ 
+@@ -93,6 +93,6 @@ void UnlockTradedItemAction::UnlockItem(Item* item)
+     }
+     else
+     {
+-        botAI->TellError("Failed to cast Pick Lock.");
++        botAI->TellError("Nepavyko panaudoti Spynų atrakinimo.");
+     }
+ }
+diff --git a/src/strategy/actions/UseItemAction.cpp b/src/strategy/actions/UseItemAction.cpp
+index 2654c1fa..37a463a3 100644
+--- a/src/strategy/actions/UseItemAction.cpp
++++ b/src/strategy/actions/UseItemAction.cpp
+@@ -34,7 +34,7 @@ bool UseItemAction::Execute(Event event)
+             return UseItemOnGameObject(*items.begin(), *gos.begin());
+     }
+ 
+-    botAI->TellError("No items (or game objects) available");
++    botAI->TellError("Nėra prieinamų daiktų (ar žaidimo objektų)");
+     return false;
+ }
+ 
+@@ -124,7 +124,7 @@ bool UseItemAction::UseItem(Item* item, ObjectGuid goGuid, Item* itemTarget, Uni
+         {
+             bool fit = SocketItem(itemTarget, item) || SocketItem(itemTarget, item, true);
+             if (!fit)
+-                botAI->TellMaster("Socket does not fit");
++                botAI->TellMaster("Lizdas netinka");
+ 
+             return fit;
+         }
+diff --git a/src/strategy/actions/UseMeetingStoneAction.cpp b/src/strategy/actions/UseMeetingStoneAction.cpp
+index 8319ee3b..49dd4d6c 100644
+--- a/src/strategy/actions/UseMeetingStoneAction.cpp
++++ b/src/strategy/actions/UseMeetingStoneAction.cpp
+@@ -35,7 +35,7 @@ bool UseMeetingStoneAction::Execute(Event event)
+ 
+     if (bot->IsInCombat())
+     {
+-        botAI->TellError("I am in combat");
++        botAI->TellError("Esu kovoje");
+         return false;
+     }
+ 
+@@ -92,13 +92,13 @@ bool SummonAction::Execute(Event event)
+ 
+     if (SummonUsingGos(master, bot) || SummonUsingNpcs(master, bot))
+     {
+-        botAI->TellMasterNoFacing("Hello!");
++        botAI->TellMasterNoFacing("Sveiki!");
+         return true;
+     }
+ 
+     if (SummonUsingGos(bot, master) || SummonUsingNpcs(bot, master))
+     {
+-        botAI->TellMasterNoFacing("Welcome!");
++        botAI->TellMasterNoFacing("Sveiki atvykę!");
+         return true;
+     }
+ 
+@@ -118,7 +118,7 @@ bool SummonAction::SummonUsingGos(Player* summoner, Player* player)
+             return Teleport(summoner, player);
+     }
+ 
+-    botAI->TellError(summoner == bot ? "There is no meeting stone nearby" : "There is no meeting stone near you");
++    botAI->TellError(summoner == bot ? "Netoliese nėra susitikimo akmens" : "Šalia tavęs nėra susitikimo akmens");
+     return false;
+ }
+ 
+@@ -138,13 +138,13 @@ bool SummonAction::SummonUsingNpcs(Player* summoner, Player* player)
+         {
+             if (!player->HasItemCount(6948, 1, false))
+             {
+-                botAI->TellError(player == bot ? "I have no hearthstone" : "You have no hearthstone");
++                botAI->TellError(player == bot ? "Neturiu židinio akmens" : "Neturi židinio akmens");
+                 return false;
+             }
+ 
+             if (player->HasSpellCooldown(8690))
+             {
+-                botAI->TellError(player == bot ? "My hearthstone is not ready" : "Your hearthstone is not ready");
++                botAI->TellError(player == bot ? "Mano židinio akmuo dar neparuoštas" : "Tavo židinio akmuo dar neparuoštas");
+                 return false;
+             }
+ 
+@@ -160,7 +160,7 @@ bool SummonAction::SummonUsingNpcs(Player* summoner, Player* player)
+         }
+     }
+ 
+-    botAI->TellError(summoner == bot ? "There are no innkeepers nearby" : "There are no innkeepers near you");
++    botAI->TellError(summoner == bot ? "Netoliese nėra smuklininkų" : "Šalia tavęs nėra smuklininkų");
+     return false;
+ }
+ 
+@@ -172,7 +172,7 @@ bool SummonAction::Teleport(Player* summoner, Player* player)
+     
+     if (player->GetVehicle())
+     {
+-        botAI->TellError("You cannot summon me while I'm on a vehicle");
++        botAI->TellError("Negali manęs pasišaukti, kol esu transporto priemonėje");
+         return false;
+     }
+ 
+@@ -194,20 +194,20 @@ bool SummonAction::Teleport(Player* summoner, Player* player)
+ 
+                 if (summoner->IsInCombat() && !sPlayerbotAIConfig->allowSummonInCombat)
+                 {
+-                    botAI->TellError("You cannot summon me while you're in combat");
++                    botAI->TellError("Negali manęs pasišaukti, kol esi kovoje");
+                     return false;
+                 }
+ 
+                 if (!summoner->IsAlive() && !sPlayerbotAIConfig->allowSummonWhenMasterIsDead)
+                 {
+-                    botAI->TellError("You cannot summon me while you're dead");
++                    botAI->TellError("Negali manęs pasišaukti, kol esi negyvas");
+                     return false;
+                 }
+ 
+                 if (bot->isDead() && !bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) &&
+                     !sPlayerbotAIConfig->allowSummonWhenBotIsDead)
+                 {
+-                    botAI->TellError("You cannot summon me while I'm dead, you need to release my spirit first");
++                    botAI->TellError("Negali manęs pasišaukti, kol esu negyvas – pirmiausia turi išlaisvinti mano dvasią");
+                     return false;
+                 }
+ 
+@@ -219,7 +219,7 @@ bool SummonAction::Teleport(Player* summoner, Player* player)
+                 {
+                     bot->ResurrectPlayer(1.0f, false);
+                     bot->SpawnCorpseBones();
+-                    botAI->TellMasterNoFacing("I live, again!");
++                    botAI->TellMasterNoFacing("Vėl gyvenu!");
+                     botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Reset();
+                 }
+ 
+@@ -242,6 +242,6 @@ bool SummonAction::Teleport(Player* summoner, Player* player)
+     }
+ 
+     if(summoner != player)
+-         botAI->TellError("Not enough place to summon");
++         botAI->TellError("Nepakanka vietos pasišaukti");
+     return false;
+ }
 diff --git a/src/strategy/actions/WorldPacketActionContext.h b/src/strategy/actions/WorldPacketActionContext.h
 index 0df4bd06..394e6c21 100644
 --- a/src/strategy/actions/WorldPacketActionContext.h
@@ -226,6 +2923,72 @@ index 90d9f64c..997057d8 100644
      triggers.push_back(new TriggerNode("arena team invite", NextAction::array(0, new NextAction("arena team accept", relevance), nullptr)));
      //triggers.push_back(new TriggerNode("no non bot players around", NextAction::array(0, new NextAction("delay", relevance), nullptr)));
      triggers.push_back(new TriggerNode("bg status", NextAction::array(0, new NextAction("bg status", relevance), nullptr)));
+diff --git a/src/strategy/rpg/NewRpgAction.cpp b/src/strategy/rpg/NewRpgAction.cpp
+index 01595edf..c1d6b1d1 100644
+--- a/src/strategy/rpg/NewRpgAction.cpp
++++ b/src/strategy/rpg/NewRpgAction.cpp
+@@ -54,10 +54,10 @@ bool StartRpgDoQuestAction::Execute(Event event)
+     if (quest)
+     {
+         botAI->rpgInfo.ChangeToDoQuest(questId, quest);
+-        bot->Whisper("Start to do quest " + std::to_string(questId), LANG_UNIVERSAL, owner);
++        bot->Whisper("Pradedu vykdyti užduotį" + std::to_string(questId), LANG_UNIVERSAL, owner);
+         return true;
+     }
+-    bot->Whisper("Invalid quest " + text, LANG_UNIVERSAL, owner);
++    bot->Whisper("Netinkama užduotis" + text, LANG_UNIVERSAL, owner);
+     return false;
+ }
+ 
+diff --git a/src/strategy/rpg/NewRpgBaseAction.cpp b/src/strategy/rpg/NewRpgBaseAction.cpp
+index 5e71c5c5..86bb4bb6 100644
+--- a/src/strategy/rpg/NewRpgBaseAction.cpp
++++ b/src/strategy/rpg/NewRpgBaseAction.cpp
+@@ -236,7 +236,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
+         {
+             AcceptQuest(quest, guid);
+             if (botAI->GetMaster())
+-                botAI->TellMasterNoFacing("Quest accepted " + ChatHelper::FormatQuest(quest));
++                botAI->TellMasterNoFacing("Užduotis priimta" + ChatHelper::FormatQuest(quest));
+             BroadcastHelper::BroadcastQuestAccepted(botAI, bot, quest);
+             botAI->rpgStatistic.questAccepted++;
+             LOG_DEBUG("playerbots", "[New RPG] {} accept quest {}", bot->GetName(), quest->GetQuestId());
+@@ -245,7 +245,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
+         {
+             TurnInQuest(quest, guid);
+             if (botAI->GetMaster())
+-                botAI->TellMasterNoFacing("Quest rewarded " + ChatHelper::FormatQuest(quest));
++                botAI->TellMasterNoFacing("Užduotis atlyginta" + ChatHelper::FormatQuest(quest));
+             BroadcastHelper::BroadcastQuestTurnedIn(botAI, bot, quest);
+             botAI->rpgStatistic.questRewarded++;
+             LOG_DEBUG("playerbots", "[New RPG] {} turned in quest {}", bot->GetName(), quest->GetQuestId());
+@@ -535,7 +535,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+             packet << (uint8)i;
+             bot->GetSession()->HandleQuestLogRemoveQuest(packet);
+             if (botAI->GetMaster())
+-                botAI->TellMasterNoFacing("Quest dropped " + ChatHelper::FormatQuest(quest));
++                botAI->TellMasterNoFacing("Užduotis atmesta" + ChatHelper::FormatQuest(quest));
+             botAI->rpgStatistic.questDropped++;
+             dropped++;
+         }
+@@ -560,7 +560,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+             packet << (uint8)i;
+             bot->GetSession()->HandleQuestLogRemoveQuest(packet);
+             if (botAI->GetMaster())
+-                botAI->TellMasterNoFacing("Quest dropped " + ChatHelper::FormatQuest(quest));
++                botAI->TellMasterNoFacing("Užduotis atmesta" + ChatHelper::FormatQuest(quest));
+             botAI->rpgStatistic.questDropped++;
+             dropped++;
+         }
+@@ -582,7 +582,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+         packet << (uint8)i;
+         bot->GetSession()->HandleQuestLogRemoveQuest(packet);
+         if (botAI->GetMaster())
+-            botAI->TellMasterNoFacing("Quest dropped " + ChatHelper::FormatQuest(quest));
++            botAI->TellMasterNoFacing("Užduotis atmesta" + ChatHelper::FormatQuest(quest));
+         botAI->rpgStatistic.questDropped++;
+     }
+ 
 diff --git a/src/strategy/triggers/LfgTriggers.cpp b/src/strategy/triggers/LfgTriggers.cpp
 index aa170e2b..4b23b38c 100644
 --- a/src/strategy/triggers/LfgTriggers.cpp
@@ -329,3 +3092,33 @@ index 984c1dea..341f47b7 100644
      static Trigger* unknown_dungeon(PlayerbotAI* botAI) { return new UnknownDungeonTrigger(botAI); }
      static Trigger* invalid_target(PlayerbotAI* botAI) { return new InvalidTargetTrigger(botAI); }
      static Trigger* critical_aoe_heal(PlayerbotAI* botAI)
+diff --git a/src/strategy/values/Formations.cpp b/src/strategy/values/Formations.cpp
+index 27e1c99e..3fdca389 100644
+--- a/src/strategy/values/Formations.cpp
++++ b/src/strategy/values/Formations.cpp
+@@ -606,10 +606,10 @@ bool SetFormationAction::Execute(Event event)
+     if (!value->Load(formation))
+     {
+         std::ostringstream str;
+-        str << "Invalid formation: |cffff0000" << formation;
++        str << "Netinkama rikiuotė: |cffff0000" << formation;
+         botAI->TellMaster(str);
+         botAI->TellMaster(
+-            "Please set to any of:|cffffffff chaos (default), near, queue, circle, line, shield, arrow, melee, far");
++            "Pasirink vieną iš:|cffffffff chaos (numatytoji), near, queue, circle, line, shield, arrow, melee, far");
+         return false;
+     }
+ 
+diff --git a/src/strategy/values/Stances.cpp b/src/strategy/values/Stances.cpp
+index 1cd97a39..6f34328b 100644
+--- a/src/strategy/values/Stances.cpp
++++ b/src/strategy/values/Stances.cpp
+@@ -255,7 +255,7 @@ bool SetStanceAction::Execute(Event event)
+         std::ostringstream str;
+         str << "Invalid stance: |cffff0000" << stance;
+         botAI->TellMaster(str);
+-        botAI->TellMaster("Please set to any of:|cffffffff near (default), tank, turnback, behind");
++        botAI->TellMaster("Pasirink vieną iš:|cffffffff near (numatytoji), tank, turnback, behind");
+         return false;
+     }
+ 
