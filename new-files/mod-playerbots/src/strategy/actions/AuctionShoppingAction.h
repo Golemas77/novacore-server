@@ -16,6 +16,10 @@ public:
 
     bool Execute(Event event) override;
     bool isUseful() override;
+
+private:
+    bool TryBuy();
+    bool TrySell();     // NovaCore: tik zaidejo autopilotas
 };
 
 #endif

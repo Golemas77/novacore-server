@@ -27,7 +27,7 @@ patches/
   mod-playerbots-novacore.patch        playerbots modulio pakeitimai
   mod-aoe-loot-novacore.patch          aoe-loot suderinimas su šia šerdimi
 new-files/
-  mod-playerbots/...                   nauji playerbots failai (botų pirkimas iš aukciono)
+  mod-playerbots/...                   nauji playerbots failai (pirkimas iš aukciono, žaidėjo rotacija ir autopilotas)
 modules/
   mod-hardcore/  mod-warmode/  mod-personal-loot/  mod-transmog/  mod-gm-island/    mūsų moduliai (pilni)
 LICENSE                                AGPL-3.0
@@ -45,7 +45,15 @@ LICENSE                                AGPL-3.0
 * pakartotinis LFG teleportas, kad botai pasiektų požemį;
 * botų pasisveikinimų / atsisveikinimų šnabždesių išjungimas (`AiPlayerbot.EnableGreetWhispers`);
 * sistemos pranešimų prisijungiant išjungimas (`AiPlayerbot.LoginNotices`), numatytoji reikšmė lieka įjungta;
-* botų pirkimas iš aukciono (nauji failai `PlayerbotAuctionMgr`, `AuctionShopping*`).
+* botų pirkimas iš aukciono (nauji failai `PlayerbotAuctionMgr`, `AuctionShopping*`);
+* **žaidėjo veikėjo AI režimai** (nauji failai `PlayerbotRotation.*`, `NovaAutopilotActions.*`, `NovaAutopilotTriggers.*`):
+  * `.rotacija` – automatinė kovos rotacija pagal klasę ir specializaciją (kovą pradeda pats žaidėjas);
+  * `.autopilotas` – serveris pats valdo žaidėjo veikėją: kelia lygį, atlieka ir atiduoda užduotis (tik kvestiniai mobai,
+    tikros jų atsiradimo vietos), renka užduočių daiktus, parduoda daiktus pas pardavėjus, deda į aukcioną ir perka
+    pagerinimus, jungiasi į mūšio laukus. Veikėjas juda **tik navigacijos tinklu** (jokių tiesių linijų kiaurai sienų);
+  * prieinamumas: `AiPlayerbot.NovaRotationLevel` ir `AiPlayerbot.NovaAutopilotLevel` (0 išjungta, 1 tik GM, 2 visi);
+  * klientui skirtas priedas (mygtukai „R“ ir „A“) platinamas su kliento atnaujinimu, ne šioje saugykloje;
+* reakcijos vėlinimo, kuprinės ir grobio taisyklių pakeitimai žaidėjo valdomam veikėjui (kvestiniai daiktai imami visada).
 
 ### Mūsų moduliai
 
@@ -91,6 +99,7 @@ vertimo duomenų, gyvų serverio nustatymų su slaptažodžiais. NovaCore nėra 
 **NovaCore** is a non-profit Lithuanian-language WotLK 3.3.5a private server built on AzerothCore (Playerbots branch).
 This repository publishes our modifications under **AGPL-3.0**, as required for a modified network service:
 patches against the exact upstream commits listed above (`patches/`), new playerbots files (`new-files/`) and our own
-modules (`modules/`: hardcore mode, war mode, personal loot, transmog, GM test island). See "Kaip sukompiliuoti" for the
+modules (`modules/`: hardcore mode, war mode, personal loot, transmog, GM test island). The playerbots patch also adds
+player self-AI modes (`.rotacija` combat rotation, `.autopilotas` server-driven questing/selling/auction, navmesh-only movement). See "Kaip sukompiliuoti" for the
 build steps (clone upstream at the listed commits, `git apply` the patches, copy the modules, build with `-DMODULES=static`).
 No client files, credentials or database dumps are included. We are not affiliated with Blizzard Entertainment.

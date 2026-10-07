@@ -1,8 +1,28 @@
 diff --git a/conf/playerbots.conf.dist b/conf/playerbots.conf.dist
-index 7419a97b..047b4651 100644
+index 7419a97b..2d1c447a 100644
 --- a/conf/playerbots.conf.dist
 +++ b/conf/playerbots.conf.dist
-@@ -1874,6 +1874,24 @@ AiPlayerbot.RandomBotEmote = 0
+@@ -173,6 +173,19 @@ AiPlayerbot.SummonWhenGroup = 1
+ # Player can be activated as a bot (selfbot)
+ # Selfbot permission level (0 = disabled, 1 = GM only (default), 2 = all players, 3 = activate on login)
+ AiPlayerbot.SelfBotLevel = 1
++# NovaCore: automatine kovos rotacija zaidejo paties veikejui (komanda .rotacija).
++# 0 = isjungta, 1 = tik GM, 2 = visi zaidejai (2026-10-07: atverta visiems testavimo metu; vėliau – tik premium)
++AiPlayerbot.NovaRotationLevel = 2
++
++# NovaCore: autopilotas (.autopilotas) - VISAS playerbot zaidejo paties veikejui: kelia lygi, uzduotys, profesijos,
++# pardavimas pas vendorius, aukcionas (deda / perka), musio laukai, pozemiai (LFG).
++# 0 = isjungta, 1 = tik GM, 2 = visi zaidejai (2026-10-07: atverta visiems testavimo metu; vėliau – tik premium)
++AiPlayerbot.NovaAutopilotLevel = 2
++# Autopilotas deda i aukciona daiktus, kuriu pats nenaudos (1 = taip)
++AiPlayerbot.NovaAutopilotAuctionSell = 1
++# Maziausia siulomo daikto pirkimo kaina variais (1000 = 10 sidabro)
++AiPlayerbot.NovaAutopilotAuctionMinPrice = 1000
++
+ 
+ # Give free food to bots
+ # Default: 1 (enabled)
+@@ -1874,6 +1887,24 @@ AiPlayerbot.RandomBotEmote = 0
  AiPlayerbot.RandomBotSuggestDungeons = 1
  # Bots greet players when invited
  AiPlayerbot.EnableGreet = 0
@@ -60,10 +80,27 @@ index 85bc5221..67825b6e 100644
      }
  
 diff --git a/src/PlayerbotAI.cpp b/src/PlayerbotAI.cpp
-index 5dbe5cb9..5d19dc93 100644
+index 5dbe5cb9..1242eb0d 100644
 --- a/src/PlayerbotAI.cpp
 +++ b/src/PlayerbotAI.cpp
-@@ -742,7 +742,7 @@ void PlayerbotAI::Reset(bool full)
+@@ -57,6 +57,7 @@
+ #include "Unit.h"
+ #include "UpdateTime.h"
+ #include "Vehicle.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ 
+ const int SPELL_TITAN_GRIP = 49152;
+ 
+@@ -485,6 +486,8 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
+     masterIncomingPacketHandlers.Handle(helper);
+     masterOutgoingPacketHandlers.Handle(helper);
+ 
++    sPlayerbotRotationMgr->PreAction(this);   // NovaCore: zaidejo rotacijos rezimas perjungia kovos varikli
++
+     DoNextAction(minimal);
+ 
+     if (pmo)
+@@ -742,7 +745,7 @@ void PlayerbotAI::Reset(bool full)
      {
          WorldPackets::Character::LogoutCancel data = WorldPacket(CMSG_LOGOUT_CANCEL);
          bot->GetSession()->HandleLogoutCancelOpcode(data);
@@ -72,7 +109,7 @@ index 5dbe5cb9..5d19dc93 100644
      }
  
      currentEngine = engines[BOT_STATE_NON_COMBAT];
-@@ -927,7 +927,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
+@@ -927,7 +930,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
          if (!bot->GetSession()->isLogingOut())
          {
              if (type == CHAT_MSG_WHISPER)
@@ -81,7 +118,7 @@ index 5dbe5cb9..5d19dc93 100644
  
              PlayerbotMgr* masterBotMgr = nullptr;
              if (master)
-@@ -941,7 +941,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
+@@ -941,7 +944,7 @@ void PlayerbotAI::HandleCommand(uint32 type, std::string const text, Player* fro
          if (bot->GetSession()->isLogingOut())
          {
              if (type == CHAT_MSG_WHISPER)
@@ -90,7 +127,16 @@ index 5dbe5cb9..5d19dc93 100644
  
              WorldPackets::Character::LogoutCancel data = WorldPacket(CMSG_LOGOUT_CANCEL);
              bot->GetSession()->HandleLogoutCancelOpcode(data);
-@@ -1431,7 +1431,7 @@ void PlayerbotAI::DoNextAction(bool min)
+@@ -1345,7 +1348,7 @@ void PlayerbotAI::DoNextAction(bool min)
+ 
+     if (minimal)
+     {
+-        if (!bot->isAFK() && !bot->InBattleground() && !HasRealPlayerMaster())
++        if (!bot->isAFK() && !bot->InBattleground() && !HasRealPlayerMaster() && !NovaIsAutopilot(bot))
+             bot->ToggleAFK();
+ 
+         SetNextCheckDelay(sPlayerbotAIConfig->passiveDelay);
+@@ -1431,7 +1434,7 @@ void PlayerbotAI::DoNextAction(bool min)
                  botAI->ChangeStrategy("+follow", BOT_STATE_NON_COMBAT);
  
                  if (botAI->GetMaster() == botAI->GetGroupMaster())
@@ -99,7 +145,17 @@ index 5dbe5cb9..5d19dc93 100644
                  else
                      botAI->TellMaster(!urand(0, 2) ? "Hello!" : "Hi!");
              }
-@@ -2735,8 +2735,20 @@ bool PlayerbotAI::TellMasterNoFacing(std::ostringstream& stream, PlayerbotSecuri
+@@ -1707,6 +1710,9 @@ void PlayerbotAI::ResetStrategies(bool load)
+     for (uint8 i = 0; i < BOT_STATE_MAX; i++)
+         engines[i]->Init();
+ 
++    // NovaCore: zaidejo automatines rotacijos rezimas (`.rotacija`) apriboja strategijas po kiekvieno perkrovimo.
++    sPlayerbotRotationMgr->Apply(this);
++
+     // if (load)
+     //     sPlayerbotDbStore->Load(this);
+ }
+@@ -2735,8 +2741,24 @@ bool PlayerbotAI::TellMasterNoFacing(std::ostringstream& stream, PlayerbotSecuri
      return TellMasterNoFacing(stream.str(), securityLevel);
  }
  
@@ -117,10 +173,36 @@ index 5dbe5cb9..5d19dc93 100644
 +    if (!sPlayerbotAIConfig->enableGreetWhispers && IsGreetingWhisper(text))
 +        return false;
 +
++    // NovaCore: zaidejo paties veikejo AI (rotacija / autopilotas) nesiuncia sau „slepukavimu“.
++    if (master && master == bot)
++        return false;
++
      Player* master = GetMaster();
      PlayerbotAI* masterBotAI = nullptr;
      if (master)
-@@ -4421,7 +4433,13 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
+@@ -4126,6 +4148,10 @@ bool PlayerbotAI::HasRealPlayerMaster()
+ {
+     if (master)
+     {
++        // NovaCore: zaidejo autopilotas (master == pats veikejas) elgiasi kaip botas be savininko.
++        if (master == bot && NovaIsAutopilot(bot))
++            return false;
++
+         PlayerbotAI* masterBotAI = GET_PLAYERBOT_AI(master);
+         return !masterBotAI || masterBotAI->IsRealPlayer();
+     }
+@@ -4331,6 +4357,10 @@ inline bool ZoneHasRealPlayers(Player* bot)
+ 
+ bool PlayerbotAI::AllowActive(ActivityType activityType)
+ {
++    // NovaCore: zaidejo autopilotas visada aktyvus (kitaip pirmas minutes po serverio starto veikejas buvo „Pasitraukes“)
++    if (NovaIsAutopilot(bot))
++        return true;
++
+     // when botActiveAlone is 100% and smartScale disabled
+     if (sPlayerbotAIConfig->botActiveAlone >= 100 && !sPlayerbotAIConfig->botActiveAloneSmartScale)
+     {
+@@ -4421,7 +4451,13 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
          for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
          {
              Player* member = gref->GetSource();
@@ -135,6 +217,17 @@ index 5dbe5cb9..5d19dc93 100644
              {
                  continue;
              }
+@@ -6383,6 +6419,10 @@ uint32 PlayerbotAI::GetReactDelay()
+ {
+     uint32 base = sPlayerbotAIConfig->reactDelay;  // Default 100(ms)
+ 
++    // NovaCore: zaidejo autopilotas reaguoja taip pat greitai kaip botas su zaidejo savininku
++    if (NovaIsAutopilot(bot))
++        return base;
++
+     // If dynamic react delay is disabled, use a static calculation
+     if (!sPlayerbotAIConfig->dynamicReactDelay)
+     {
 diff --git a/src/PlayerbotAIConfig.cpp b/src/PlayerbotAIConfig.cpp
 index 6c6aa322..58d6a82b 100644
 --- a/src/PlayerbotAIConfig.cpp
@@ -342,18 +435,19 @@ index 027e2bab..9a0e11a9 100644
 +    ChatHandler(player->GetSession()).PSendSysMessage("Paskyra sėkmingai atsieta.");
  }
 diff --git a/src/Playerbots.cpp b/src/Playerbots.cpp
-index ed44a70f..a77026df 100644
+index ed44a70f..c9517a65 100644
 --- a/src/Playerbots.cpp
 +++ b/src/Playerbots.cpp
-@@ -15,6 +15,7 @@
+@@ -15,6 +15,8 @@
   * with this program. If not, see <http://www.gnu.org/licenses/>.
   */
  
 +#include "PlayerbotAuctionMgr.h"
++#include "PlayerbotRotation.h"   // NovaCore
  #include "Playerbots.h"
  
  #include "Channel.h"
-@@ -101,14 +102,17 @@ public:
+@@ -101,14 +103,17 @@ public:
              // especially if you are distributing a repack or hosting a public server
              // e.g. you can replace the URL with your own repository,
              // but it should be publicly accessible and include all modifications you've made
@@ -373,11 +467,33 @@ index ed44a70f..a77026df 100644
              {
                  std::string roundedTime =
                      std::to_string(std::ceil((sPlayerbotAIConfig->maxRandomBots * 0.11 / 60) * 10) / 10.0);
-@@ -441,6 +445,7 @@ void AddPlayerbotsScripts()
+@@ -140,6 +145,10 @@ public:
+         {
+             if (PlayerbotAI* botAI = GET_PLAYERBOT_AI(receiver))
+             {
++                // NovaCore: zaidejas su „self“ AI (rotacija / autopilotas) vis tiek turi gauti zmoniu sukuriamus slepukavimus.
++                if (botAI->IsRealPlayer())
++                    return true;
++
+                 botAI->HandleCommand(type, msg, player);
+ 
+                 return false;
+@@ -317,7 +326,8 @@ public:
+         for (ObjectGuid const& guid : guidsList.guids)
+         {
+             Player* player = ObjectAccessor::FindPlayer(guid);
+-            if (guid.IsGroup() || (player && !GET_PLAYERBOT_AI(player)))
++            // NovaCore: zaidejas su ijungta automatine rotacija (self AI) vis tiek yra tikras zaidejas.
++            if (guid.IsGroup() || (player && (!GET_PLAYERBOT_AI(player) || GET_PLAYERBOT_AI(player)->IsRealPlayer())))
+             {
+                 nonBotFound = true;
+                 break;
+@@ -441,6 +451,8 @@ void AddPlayerbotsScripts()
      new PlayerbotsServerScript();
      new PlayerbotsWorldScript();
      new PlayerbotsScript();
 +    AddPlayerbotAuctionScripts();   // NovaCore
++    AddPlayerbotRotationScripts();  // NovaCore: `.rotacija` (zr. PlayerbotRotation.h)
      new PlayerBotsBGScript();
  
      AddSC_playerbots_commandscript();
@@ -423,6 +539,28 @@ index 1b69d7f3..66fac0fe 100644
          if (botAI->AllowActivity())
              ++active;
  
+diff --git a/src/strategy/Engine.cpp b/src/strategy/Engine.cpp
+index 15055f0e..a49013d3 100644
+--- a/src/strategy/Engine.cpp
++++ b/src/strategy/Engine.cpp
+@@ -9,6 +9,7 @@
+ #include "Event.h"
+ #include "PerformanceMonitor.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "Queue.h"
+ #include "Strategy.h"
+ #include "Timer.h"
+@@ -595,7 +596,8 @@ bool Engine::ListenAndExecute(Action* action, Event event)
+ void Engine::LogAction(char const* format, ...)
+ {
+     Player* bot = botAI->GetBot();
+-    if (sPlayerbotAIConfig->logInGroupOnly && (!bot->GetGroup() || !botAI->HasRealPlayerMaster()) && !testMode)
++    if (sPlayerbotAIConfig->logInGroupOnly && (!bot->GetGroup() || !botAI->HasRealPlayerMaster()) && !testMode &&
++        !NovaIsAutopilot(bot))   // NovaCore: autopilotui visada fiksuojam paskutinius veiksmus
+         return;
+ 
+     char buf[1024];
 diff --git a/src/strategy/actions/AcceptInvitationAction.cpp b/src/strategy/actions/AcceptInvitationAction.cpp
 index 6c246992..159a9855 100644
 --- a/src/strategy/actions/AcceptInvitationAction.cpp
@@ -529,10 +667,18 @@ index 3563bfe1..bd8224c9 100644
                   bot->GetName().c_str());
          return true;
 diff --git a/src/strategy/actions/AttackAction.cpp b/src/strategy/actions/AttackAction.cpp
-index e557a178..9ba82c33 100644
+index e557a178..fb42ce5a 100644
 --- a/src/strategy/actions/AttackAction.cpp
 +++ b/src/strategy/actions/AttackAction.cpp
-@@ -38,7 +38,7 @@ bool AttackMyTargetAction::Execute(Event event)
+@@ -11,6 +11,7 @@
+ #include "LootObjectStack.h"
+ #include "PlayerbotAI.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "ServerFacade.h"
+ #include "SharedDefines.h"
+ #include "Unit.h"
+@@ -38,7 +39,7 @@ bool AttackMyTargetAction::Execute(Event event)
      if (!guid)
      {
          if (verbose)
@@ -541,7 +687,7 @@ index e557a178..9ba82c33 100644
  
          return false;
      }
-@@ -64,7 +64,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+@@ -64,7 +65,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
          bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
      {
          if (verbose)
@@ -550,7 +696,7 @@ index e557a178..9ba82c33 100644
  
          return false;
      }
-@@ -72,7 +72,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+@@ -72,7 +73,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
      if (!target)
      {
          if (verbose)
@@ -559,7 +705,7 @@ index e557a178..9ba82c33 100644
  
          return false;
      }
-@@ -80,7 +80,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+@@ -80,7 +81,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
      if (!target->IsInWorld())
      {
          if (verbose)
@@ -568,7 +714,7 @@ index e557a178..9ba82c33 100644
          return false;
      }
  
-@@ -89,7 +89,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+@@ -89,7 +90,7 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
          && (target->IsPlayer() || target->IsPet()))
      {
          if (verbose)
@@ -577,7 +723,7 @@ index e557a178..9ba82c33 100644
  
          return false;
      }
-@@ -97,35 +97,35 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+@@ -97,35 +98,35 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
      if (bot->IsFriendlyTo(target))
      {
          if (verbose)
@@ -618,6 +764,63 @@ index e557a178..9ba82c33 100644
  
          return false;
      }
+@@ -146,7 +147,8 @@ bool AttackAction::Attack(Unit* target, bool with_pet /*true*/)
+ 
+     LastMovement& lastMovement = AI_VALUE(LastMovement&, "last movement");
+     bool moveControlled = bot->GetMotionMaster()->GetMotionSlotType(MOTION_SLOT_CONTROLLED) != NULL_MOTION_TYPE;
+-    if (lastMovement.priority < MovementPriority::MOVEMENT_COMBAT && bot->isMoving() && !moveControlled)
++    // NovaCore: zaidejo rotacijos rezime AI nestabdo zaidejo judejimo
++    if (!NovaRotationBlocksMovement(botAI) && lastMovement.priority < MovementPriority::MOVEMENT_COMBAT && bot->isMoving() && !moveControlled)
+     {
+         AI_VALUE(LastMovement&, "last movement").clear();
+         bot->GetMotionMaster()->Clear(false);
+diff --git a/src/strategy/actions/AutoMaintenanceOnLevelupAction.cpp b/src/strategy/actions/AutoMaintenanceOnLevelupAction.cpp
+index 9bced53b..aa8f506e 100644
+--- a/src/strategy/actions/AutoMaintenanceOnLevelupAction.cpp
++++ b/src/strategy/actions/AutoMaintenanceOnLevelupAction.cpp
+@@ -7,13 +7,23 @@
+ #include "RandomPlayerbotMgr.h"
+ #include "SharedDefines.h"
+ #include "BroadcastHelper.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ 
+ bool AutoMaintenanceOnLevelupAction::Execute(Event event)
+ {
++    std::unordered_set<uint32> temporaryBefore;
++    bool const autopilot = NovaIsAutopilot(bot);
++    if (autopilot)
++        NovaCollectTemporarySpells(bot, temporaryBefore);
++
+     AutoPickTalents();
+     AutoLearnSpell();
+     AutoUpgradeEquip();
+     AutoTeleportForLevel();
++
++    // NovaCore: autopilotui klases burtai paliekami (kitaip po atsijungimo dingtu)
++    if (autopilot)
++        NovaPersistNewTemporarySpells(bot, temporaryBefore);
+     return true;
+ }
+ 
+@@ -33,7 +43,7 @@ void AutoMaintenanceOnLevelupAction::AutoTeleportForLevel()
+ 
+ void AutoMaintenanceOnLevelupAction::AutoPickTalents()
+ {
+-    if (!sPlayerbotAIConfig->autoPickTalents || !sRandomPlayerbotMgr->IsRandomBot(bot))
++    if (!sPlayerbotAIConfig->autoPickTalents || !(sRandomPlayerbotMgr->IsRandomBot(bot) || NovaIsAutopilot(bot)))
+         return;
+ 
+     if (bot->GetFreeTalentPoints() <= 0)
+@@ -65,7 +75,8 @@ void AutoMaintenanceOnLevelupAction::AutoLearnSpell()
+ void AutoMaintenanceOnLevelupAction::LearnSpells(std::ostringstream* out)
+ {
+     BroadcastHelper::BroadcastLevelup(botAI, bot);
+-    if (sPlayerbotAIConfig->autoLearnTrainerSpells && sRandomPlayerbotMgr->IsRandomBot(bot))
++    // NovaCore: autopilotas (zaidejo veikejas) taip pat automatiskai issimoksta klases burtus (kaip level-up botai).
++    if (sPlayerbotAIConfig->autoLearnTrainerSpells && (sRandomPlayerbotMgr->IsRandomBot(bot) || NovaIsAutopilot(bot)))
+         LearnTrainerSpells(out);
+ 
+     if (sPlayerbotAIConfig->autoLearnQuestSpells && sRandomPlayerbotMgr->IsRandomBot(bot))
 diff --git a/src/strategy/actions/BankAction.cpp b/src/strategy/actions/BankAction.cpp
 index d49559a0..7f6306d8 100644
 --- a/src/strategy/actions/BankAction.cpp
@@ -724,6 +927,27 @@ index 1690774d..4410cb00 100644
              return false;
          }
      }
+diff --git a/src/strategy/actions/ChangeTalentsAction.cpp b/src/strategy/actions/ChangeTalentsAction.cpp
+index 65634162..feca5667 100644
+--- a/src/strategy/actions/ChangeTalentsAction.cpp
++++ b/src/strategy/actions/ChangeTalentsAction.cpp
+@@ -11,6 +11,7 @@
+ #include "PlayerbotAIConfig.h"
+ #include "PlayerbotFactory.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "AiObjectContext.h"
+ #include "Log.h" 
+ 
+@@ -372,7 +373,7 @@ bool AutoSetTalentsAction::Execute(Event event)
+ {
+     std::ostringstream out;
+ 
+-    if (!sPlayerbotAIConfig->autoPickTalents || !sRandomPlayerbotMgr->IsRandomBot(bot))
++    if (!sPlayerbotAIConfig->autoPickTalents || !(sRandomPlayerbotMgr->IsRandomBot(bot) || NovaIsAutopilot(bot)))
+         return false;
+ 
+     if (bot->GetFreeTalentPoints() <= 0)
 diff --git a/src/strategy/actions/ChatShortcutActions.cpp b/src/strategy/actions/ChatShortcutActions.cpp
 index f7e02163..260b440a 100644
 --- a/src/strategy/actions/ChatShortcutActions.cpp
@@ -844,10 +1068,46 @@ index f7e02163..260b440a 100644
      return true;
  }
 diff --git a/src/strategy/actions/ChooseTargetActions.cpp b/src/strategy/actions/ChooseTargetActions.cpp
-index 0a5bd7c4..b2d1f56c 100644
+index 0a5bd7c4..47548237 100644
 --- a/src/strategy/actions/ChooseTargetActions.cpp
 +++ b/src/strategy/actions/ChooseTargetActions.cpp
-@@ -154,7 +154,7 @@ bool AttackRtiTargetAction::Execute(Event event)
+@@ -10,6 +10,8 @@
+ #include "LootObjectStack.h"
+ #include "NewRpgStrategy.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
++#include "NovaAutopilotActions.h"   // NovaCore
+ #include "PossibleRpgTargetsValue.h"
+ #include "PvpTriggers.h"
+ #include "ServerFacade.h"
+@@ -43,6 +45,15 @@ bool AttackAnythingAction::isUseful()
+     if (bot->IsInCombat())
+         return false;
+ 
++    // NovaCore: autopilotas pirmiausia atiduoda ivykdytas uzduotis – nauju taikiniu netraukiam
++    if (NovaIsAutopilot(bot))
++    {
++        uint32 pendingQuest = 0;
++        WorldPosition pendingPos;
++        if (NovaFindCompletedQuest(bot, botAI, pendingQuest, pendingPos))
++            return false;
++    }
++
+     Unit* target = GetTarget();
+     if (!target || !target->IsInWorld())  // Checks if the target is valid and in the world
+         return false;
+@@ -116,6 +127,10 @@ bool AttackAnythingAction::Execute(Event event)
+     {
+         if (Unit* grindTarget = GetTarget())
+         {
++            if (NovaIsAutopilot(bot))
++                LOG_INFO("playerbots", "Autopilotas {}: pradeda kova su {} (id {}, lvl {})", bot->GetName(),
++                         grindTarget->GetName(), grindTarget->GetEntry(), grindTarget->GetLevel());
++
+             if (char const* grindName = grindTarget->GetName().c_str())
+             {
+                 context->GetValue<ObjectGuid>("pull target")->Set(grindTarget->GetGUID());
+@@ -154,7 +169,7 @@ bool AttackRtiTargetAction::Execute(Event event)
      }
      else
      {
@@ -1084,6 +1344,27 @@ index ba44424b..ec3e0f3b 100644
              break;*/
          default:
              // return false;
+diff --git a/src/strategy/actions/EquipAction.cpp b/src/strategy/actions/EquipAction.cpp
+index 08e1d390..77295653 100644
+--- a/src/strategy/actions/EquipAction.cpp
++++ b/src/strategy/actions/EquipAction.cpp
+@@ -10,6 +10,7 @@
+ #include "ItemUsageValue.h"
+ #include "ItemVisitors.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "StatsWeightCalculator.h"
+ 
+ bool EquipAction::Execute(Event event)
+@@ -299,7 +300,7 @@ void EquipAction::EquipItem(Item* item)
+ 
+ bool EquipUpgradesAction::Execute(Event event)
+ {
+-    if (!sPlayerbotAIConfig->autoEquipUpgradeLoot && !sRandomPlayerbotMgr->IsRandomBot(bot))
++    if (!sPlayerbotAIConfig->autoEquipUpgradeLoot && !(sRandomPlayerbotMgr->IsRandomBot(bot) || NovaIsAutopilot(bot)))
+         return false;
+ 
+     if (event.GetSource() == "trade status")
 diff --git a/src/strategy/actions/EquipGlyphsAction.cpp b/src/strategy/actions/EquipGlyphsAction.cpp
 index d879e753..dd39cb76 100644
 --- a/src/strategy/actions/EquipGlyphsAction.cpp
@@ -1423,6 +1704,36 @@ index 58602805..266452da 100644
  
      bool randomBot = sRandomPlayerbotMgr->IsRandomBot(bot);
      bool shouldStay = randomBot && bot->GetGroup() && player == bot;
+diff --git a/src/strategy/actions/LfgActions.cpp b/src/strategy/actions/LfgActions.cpp
+index 4ed8618b..5310a4ad 100644
+--- a/src/strategy/actions/LfgActions.cpp
++++ b/src/strategy/actions/LfgActions.cpp
+@@ -11,6 +11,7 @@
+ #include "LFGPackets.h"
+ #include "Opcodes.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "World.h"
+ #include "WorldPacket.h"
+ 
+@@ -319,7 +320,7 @@ bool LfgJoinAction::isUseful()
+         return false;
+ 	
+ 	// don't use if active player master
+-    if (GET_PLAYERBOT_AI(bot)->IsRealPlayer())
++    if (GET_PLAYERBOT_AI(bot)->IsRealPlayer() && !NovaIsAutopilot(bot))   // NovaCore: autopilotas pats ieško pozemio
+         return false;
+ 
+     if (bot->GetGroup() && bot->GetGroup()->GetLeaderGUID() != bot->GetGUID())
+@@ -340,7 +341,7 @@ bool LfgJoinAction::isUseful()
+     if (bot->isDead())
+         return false;
+ 
+-    if (!sRandomPlayerbotMgr->IsRandomBot(bot))
++    if (!sRandomPlayerbotMgr->IsRandomBot(bot) && !NovaIsAutopilot(bot))   // NovaCore
+         return false;
+ 
+     Map* map = bot->GetMap();
 diff --git a/src/strategy/actions/ListQuestsActions.cpp b/src/strategy/actions/ListQuestsActions.cpp
 index 7f5d9878..9453d631 100644
 --- a/src/strategy/actions/ListQuestsActions.cpp
@@ -1460,6 +1771,57 @@ index 80277ea8..05bc1bfa 100644
  
      std::sort(spells.begin(), spells.end(), CompareSpells);
  
+diff --git a/src/strategy/actions/LootAction.cpp b/src/strategy/actions/LootAction.cpp
+index 0d5ed73e..faa69e14 100644
+--- a/src/strategy/actions/LootAction.cpp
++++ b/src/strategy/actions/LootAction.cpp
+@@ -17,6 +17,7 @@
+ #include "ServerFacade.h"
+ #include "GuildMgr.h"
+ #include "BroadcastHelper.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ 
+ bool LootAction::Execute(Event /*event*/)
+ {   
+@@ -95,7 +96,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
+     if (bot->IsMounted())
+     {
+         bot->Dismount();
+-        botAI->SetNextCheckDelay(sPlayerbotAIConfig->lootDelay); // Small delay to avoid animation issues
++        botAI->SetNextCheckDelay(NovaIsAutopilot(bot) ? std::min<uint32>(sPlayerbotAIConfig->lootDelay, 250) : sPlayerbotAIConfig->lootDelay); // Small delay to avoid animation issues
+     }
+ 
+     if (creature && creature->HasFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_LOOTABLE))
+@@ -104,7 +105,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
+         *packet << lootObject.guid;
+         bot->GetSession()->QueuePacket(packet);
+         // bot->GetSession()->HandleLootOpcode(packet);
+-        botAI->SetNextCheckDelay(sPlayerbotAIConfig->lootDelay);
++        botAI->SetNextCheckDelay(NovaIsAutopilot(bot) ? std::min<uint32>(sPlayerbotAIConfig->lootDelay, 250) : sPlayerbotAIConfig->lootDelay);
+         return true;
+     }
+ 
+@@ -402,7 +403,10 @@ bool StoreLootAction::Execute(Event event)
+         if (!proto)
+             continue;
+ 
+-        if (!botAI->HasActivePlayerMaster() && AI_VALUE(uint8, "bag space") > 80)
++        // NovaCore: uzduociu daiktai imami VISADA. Kitaip kai kuprine >80 % pilna, botas praleisdavo ne sukraunamus daiktus,
++        // tarp ju ir uzduociu (pvz. raudonas bandanas is Defias banditu) – uzduotis niekada nebaigiama.
++        bool const questItem = proto->Class == ITEM_CLASS_QUEST || bot->HasQuestForItem(itemid);
++        if (!questItem && !botAI->HasActivePlayerMaster() && AI_VALUE(uint8, "bag space") > 80)
+         {
+             uint32 maxStack = proto->GetMaxStackSize();
+             if (maxStack == 1)
+@@ -442,7 +446,7 @@ bool StoreLootAction::Execute(Event event)
+         *packet << itemindex;
+         bot->GetSession()->QueuePacket(packet);
+         // bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
+-        botAI->SetNextCheckDelay(sPlayerbotAIConfig->lootDelay);
++        botAI->SetNextCheckDelay(NovaIsAutopilot(bot) ? std::min<uint32>(sPlayerbotAIConfig->lootDelay, 250) : sPlayerbotAIConfig->lootDelay);
+ 
+         if (proto->Quality > ITEM_QUALITY_NORMAL && !urand(0, 50) && botAI->HasStrategy("emote", BOT_STATE_NON_COMBAT) && sPlayerbotAIConfig->randomBotEmote)
+             botAI->PlayEmote(TEXT_EMOTE_CHEER);
 diff --git a/src/strategy/actions/LootStrategyAction.cpp b/src/strategy/actions/LootStrategyAction.cpp
 index db09727f..eb271250 100644
 --- a/src/strategy/actions/LootStrategyAction.cpp
@@ -1520,10 +1882,18 @@ index f15034b2..82f376dc 100644
      }
  
 diff --git a/src/strategy/actions/MovementActions.cpp b/src/strategy/actions/MovementActions.cpp
-index b2a36efd..12a4ac50 100644
+index b2a36efd..79d75670 100644
 --- a/src/strategy/actions/MovementActions.cpp
 +++ b/src/strategy/actions/MovementActions.cpp
-@@ -171,7 +171,7 @@ bool MovementAction::MoveToLOS(WorldObject* target, bool ranged)
+@@ -26,6 +26,7 @@
+ #include "PathGenerator.h"
+ #include "PlayerbotAI.h"
+ #include "PlayerbotAIConfig.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "Playerbots.h"
+ #include "Position.h"
+ #include "PositionValue.h"
+@@ -171,7 +172,7 @@ bool MovementAction::MoveToLOS(WorldObject* target, bool ranged)
      if (dest.isSet())
          return MoveTo(dest.mapId, dest.x, dest.y, dest.z);
      else
@@ -1532,7 +1902,122 @@ index b2a36efd..12a4ac50 100644
  
      return false;
  }
-@@ -1168,13 +1168,13 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
+@@ -228,6 +229,87 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle,
+             return true;
+         }
+     }
++    else if (generatePath && NovaIsAutopilot(bot))
++    {
++        // NovaCore: zaidejo autopilotas EINA TIK NAVIGACIJOS TINKLU. Standartinis MovePoint(forceDestination = true), kai kelio
++        // nera arba jis per ilgas (PATHFIND_NOPATH / SHORTCUT / SHORT), veikejui duoda TIESIA linija i taska – tikras klientas
++        // seka serverio kelia tiksliai, todel veikejas eitu kiaurai sienu, pastatu ir uolu. Cia tokius kelius atmetam;
++        // jei kelias per ilgas – einam trumpesniais etapais, kiekvienas patikrinamas atskirai.
++        float const fullDist = bot->GetExactDist(x, y, z);
++        if (fullDist <= 0.01f)
++            return false;
++
++        auto usable = [this](float tx, float ty, float tz) -> bool
++        {
++            PathGenerator probe(bot);
++            if (!probe.CalculatePath(tx, ty, tz, false))
++                return false;
++
++            if (probe.GetPathType() & (PATHFIND_NOPATH | PATHFIND_SHORTCUT | PATHFIND_SHORT | PATHFIND_NOT_USING_PATH))
++                return false;
++
++            return probe.GetPath().size() >= 2;
++        };
++
++        float tx = x, ty = y, tz = z;
++        bool found = usable(tx, ty, tz);
++        if (!found)
++        {
++            float const dist2d = bot->GetExactDist2d(x, y);
++            float const baseAngle = bot->GetAngle(x, y);
++            static float const ratios[] = { 0.6f, 0.4f, 0.25f, 0.15f };
++            static float const turns[] = { 0.0f, 0.6f, -0.6f, 1.2f, -1.2f };   // radianais
++
++            for (float ratio : ratios)
++            {
++                float const hop = dist2d * ratio;
++                if (hop < 12.0f)
++                    break;
++
++                for (float turn : turns)
++                {
++                    float const hx = bot->GetPositionX() + std::cos(baseAngle + turn) * hop;
++                    float const hy = bot->GetPositionY() + std::sin(baseAngle + turn) * hop;
++                    float const hz = bot->GetMapHeight(hx, hy, bot->GetPositionZ() + 5.0f);
++                    if (hz <= INVALID_HEIGHT)
++                        continue;
++
++                    if (usable(hx, hy, hz))
++                    {
++                        tx = hx;
++                        ty = hy;
++                        tz = hz;
++                        found = true;
++                        break;
++                    }
++                }
++
++                if (found)
++                    break;
++            }
++        }
++
++        if (!found)
++            return false;   // nera saugaus kelio – geriau stovim, nei einam kiaurai sienu
++
++        if (bot->IsSitState())
++            bot->SetStandState(UNIT_STAND_STATE_STAND);
++
++        MotionMaster& mm = *bot->GetMotionMaster();
++        mm.Clear();
++        if (!backwards)
++            mm.MovePoint(0, tx, ty, tz, true, false);
++        else
++            mm.MovePointBackwards(0, tx, ty, tz, true, false);
++
++        float delay = 1000.0f * MoveDelay(bot->GetExactDist(tx, ty, tz), backwards);
++        if (lessDelay)
++            delay -= botAI->GetReactDelay();
++        delay = std::max(.0f, delay);
++        delay = std::min((float)sPlayerbotAIConfig->maxWaitForMove, delay);
++        AI_VALUE(LastMovement&, "last movement").Set(mapId, x, y, z, bot->GetOrientation(), delay, priority);
++        return true;
++    }
+     else if (exact_waypoint || disableMoveSplinePath || !generatePath)
+     {
+         float distance = bot->GetExactDist(x, y, z);
+@@ -921,6 +1003,8 @@ bool MovementAction::IsMovingAllowed(WorldObject* target)
+ {
+     if (!target)
+         return false;
++    if (NovaRotationBlocksMovement(botAI))   // NovaCore: zaidejo rotacijos rezimas – veikejas pats nejuda
++        return false;
+ 
+     if (bot->GetMapId() != target->GetMapId())
+         return false;
+@@ -934,6 +1018,8 @@ bool MovementAction::IsMovingAllowed(WorldObject* target)
+ 
+ bool MovementAction::IsMovingAllowed(uint32 mapId, float x, float y, float z)
+ {
++    if (NovaRotationBlocksMovement(botAI))   // NovaCore: zaidejo rotacijos rezimas – veikejas pats nejuda
++        return false;
+     // removed sqrt as means distance limit was effectively 22500 (ReactDistance�)
+     // leaving it commented incase we find ReactDistance limit causes problems
+     // float distance = sqrt(bot->GetDistance(x, y, z));
+@@ -1117,6 +1203,8 @@ void MovementAction::UpdateMovementState()
+ 
+ bool MovementAction::Follow(Unit* target, float distance, float angle)
+ {
++    if (NovaRotationBlocksMovement(botAI))   // NovaCore: zaidejo rotacijos rezimas – veikejas pats nejuda
++        return false;
+     UpdateMovementState();
+ 
+     if (!target)
+@@ -1168,13 +1256,13 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
          if (bot->isDead() && botAI->GetMaster()->IsAlive())
          {
              bot->ResurrectPlayer(1.0f, false);
@@ -1549,7 +2034,25 @@ index b2a36efd..12a4ac50 100644
          bot->TeleportTo(target->GetMapId(), target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(),
      target->GetOrientation()); return false;
      }
-@@ -1387,7 +1387,7 @@ bool MovementAction::Flee(Unit* target)
+@@ -1291,6 +1379,8 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
+ 
+ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
+ {
++    if (NovaRotationBlocksMovement(botAI))   // NovaCore: zaidejo rotacijos rezimas – veikejas pats nejuda
++        return false;
+     if (!IsMovingAllowed())
+     {
+         return false;
+@@ -1375,6 +1465,8 @@ void MovementAction::SetNextMovementDelay(float delayMillis)
+ 
+ bool MovementAction::Flee(Unit* target)
+ {
++    if (NovaRotationBlocksMovement(botAI))   // NovaCore: zaidejo rotacijos rezimas – veikejas pats nejuda
++        return false;
+     Player* master = GetMaster();
+     if (!target)
+         target = master;
+@@ -1387,7 +1479,7 @@ bool MovementAction::Flee(Unit* target)
  
      if (!IsMovingAllowed())
      {
@@ -1558,7 +2061,7 @@ index b2a36efd..12a4ac50 100644
          return false;
      }
  
-@@ -1543,7 +1543,7 @@ bool MovementAction::Flee(Unit* target)
+@@ -1543,7 +1635,7 @@ bool MovementAction::Flee(Unit* target)
      float rx, ry, rz;
      if (!manager.CalculateDestination(&rx, &ry, &rz))
      {
@@ -1567,7 +2070,7 @@ index b2a36efd..12a4ac50 100644
          return false;
      }
  
-@@ -2511,7 +2511,7 @@ bool DisperseSetAction::Execute(Event event)
+@@ -2511,7 +2603,7 @@ bool DisperseSetAction::Execute(Event event)
      if (text == "disable")
      {
          RESET_AI_VALUE(float, "disperse distance");
@@ -2883,51 +3386,94 @@ index 8319ee3b..49dd4d6c 100644
      return false;
  }
 diff --git a/src/strategy/actions/WorldPacketActionContext.h b/src/strategy/actions/WorldPacketActionContext.h
-index 0df4bd06..394e6c21 100644
+index 0df4bd06..f2f7dbd2 100644
 --- a/src/strategy/actions/WorldPacketActionContext.h
 +++ b/src/strategy/actions/WorldPacketActionContext.h
-@@ -19,6 +19,7 @@
+@@ -19,6 +19,8 @@
  #include "GuildCreateActions.h"
  #include "InventoryChangeFailureAction.h"
  #include "LeaveGroupAction.h"
 +#include "AuctionShoppingAction.h"
++#include "NovaAutopilotActions.h"
  #include "LfgActions.h"
  #include "LootAction.h"
  #include "LootRollAction.h"
-@@ -108,6 +109,7 @@ public:
+@@ -108,6 +110,11 @@ public:
          creators["lfg role check"] = &WorldPacketActionContext::lfg_role_check;
          creators["lfg leave"] = &WorldPacketActionContext::lfg_leave;
          creators["lfg teleport"] = &WorldPacketActionContext::lfg_teleport;
 +        creators["ah shopping"] = &WorldPacketActionContext::ah_shopping;
++        creators["nova turn in"] = &WorldPacketActionContext::nova_turn_in;               // NovaCore
++        creators["nova quest objects"] = &WorldPacketActionContext::nova_quest_objects;   // NovaCore
++        creators["nova vendor trip"] = &WorldPacketActionContext::nova_vendor_trip;       // NovaCore
++        creators["nova quest mobs"] = &WorldPacketActionContext::nova_quest_mobs;         // NovaCore
          creators["see spell"] = &WorldPacketActionContext::see_spell;
          creators["arena team accept"] = &WorldPacketActionContext::arena_team_accept;
      }
-@@ -169,6 +171,7 @@ private:
+@@ -169,6 +176,11 @@ private:
      static Action* arena_tactics(PlayerbotAI* botAI) { return new ArenaTactics(botAI); }
      static Action* petition_sign(PlayerbotAI* botAI) { return new PetitionSignAction(botAI); }
      static Action* lfg_teleport(PlayerbotAI* botAI) { return new LfgTeleportAction(botAI); }
 +    static Action* ah_shopping(PlayerbotAI* botAI) { return new AuctionShoppingAction(botAI); }
++    static Action* nova_turn_in(PlayerbotAI* botAI) { return new NovaTurnInAction(botAI); }
++    static Action* nova_quest_objects(PlayerbotAI* botAI) { return new NovaQuestObjectsAction(botAI); }
++    static Action* nova_vendor_trip(PlayerbotAI* botAI) { return new NovaVendorTripAction(botAI); }
++    static Action* nova_quest_mobs(PlayerbotAI* botAI) { return new NovaQuestMobsAction(botAI); }
      static Action* lfg_leave(PlayerbotAI* botAI) { return new LfgLeaveAction(botAI); }
      static Action* lfg_accept(PlayerbotAI* botAI) { return new LfgAcceptAction(botAI); }
      static Action* lfg_role_check(PlayerbotAI* botAI) { return new LfgRoleCheckAction(botAI); }
 diff --git a/src/strategy/generic/WorldPacketHandlerStrategy.cpp b/src/strategy/generic/WorldPacketHandlerStrategy.cpp
-index 90d9f64c..997057d8 100644
+index 90d9f64c..30a78c87 100644
 --- a/src/strategy/generic/WorldPacketHandlerStrategy.cpp
 +++ b/src/strategy/generic/WorldPacketHandlerStrategy.cpp
-@@ -50,6 +50,8 @@ void WorldPacketHandlerStrategy::InitTriggers(std::vector<TriggerNode*>& trigger
+@@ -50,6 +50,13 @@ void WorldPacketHandlerStrategy::InitTriggers(std::vector<TriggerNode*>& trigger
      triggers.push_back(new TriggerNode("petition offer", NextAction::array(0, new NextAction("petition sign", relevance), nullptr)));
      triggers.push_back(new TriggerNode("lfg proposal", NextAction::array(0, new NextAction("lfg accept", relevance), nullptr)));
      triggers.push_back(new TriggerNode("lfg proposal active", NextAction::array(0, new NextAction("lfg accept", relevance), nullptr)));
 +    triggers.push_back(new TriggerNode("lfg teleport pending", NextAction::array(0, new NextAction("lfg teleport", relevance), nullptr)));  // NovaCore
 +    triggers.push_back(new TriggerNode("ah shopping", NextAction::array(0, new NextAction("ah shopping", relevance), nullptr)));  // NovaCore
++    // NovaCore: zaidejo autopilotas (aktyvus tik jam) – uzduociu atidavimas, objektu uzduotys, pardavimas pilnai kuprinei
++    triggers.push_back(new TriggerNode("nova bags full", NextAction::array(0, new NextAction("nova vendor trip", relevance + 1), nullptr)));
++    triggers.push_back(new TriggerNode("nova turn in", NextAction::array(0, new NextAction("nova turn in", relevance), nullptr)));
++    triggers.push_back(new TriggerNode("nova quest objects", NextAction::array(0, new NextAction("nova quest objects", relevance - 10), nullptr)));
++    triggers.push_back(new TriggerNode("nova quest mobs", NextAction::array(0, new NextAction("nova quest mobs", 3.5f), nullptr)));
      triggers.push_back(new TriggerNode("arena team invite", NextAction::array(0, new NextAction("arena team accept", relevance), nullptr)));
      //triggers.push_back(new TriggerNode("no non bot players around", NextAction::array(0, new NextAction("delay", relevance), nullptr)));
      triggers.push_back(new TriggerNode("bg status", NextAction::array(0, new NextAction("bg status", relevance), nullptr)));
 diff --git a/src/strategy/rpg/NewRpgAction.cpp b/src/strategy/rpg/NewRpgAction.cpp
-index 01595edf..c1d6b1d1 100644
+index 01595edf..1a9298cc 100644
 --- a/src/strategy/rpg/NewRpgAction.cpp
 +++ b/src/strategy/rpg/NewRpgAction.cpp
-@@ -54,10 +54,10 @@ bool StartRpgDoQuestAction::Execute(Event event)
+@@ -3,11 +3,20 @@
+ #include <cmath>
+ #include <cstdint>
+ #include <cstdlib>
++#include <mutex>
++#include <unordered_map>
++#include <unordered_set>
++#include <vector>
+ 
+ #include "BroadcastHelper.h"
+ #include "ChatHelper.h"
+ #include "DBCStores.h"
+ #include "G3D/Vector2.h"
++#include "WorldSession.h"
++#include "Log.h"
++#include "LootObjectStack.h"
++#include "LootMgr.h"
++#include "GameObject.h"
+ #include "GossipDef.h"
+ #include "IVMapMgr.h"
+ #include "NewRpgInfo.h"
+@@ -21,6 +30,7 @@
+ #include "Player.h"
+ #include "PlayerbotAI.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "Position.h"
+ #include "QuestDef.h"
+ #include "Random.h"
+@@ -54,10 +64,10 @@ bool StartRpgDoQuestAction::Execute(Event event)
      if (quest)
      {
          botAI->rpgInfo.ChangeToDoQuest(questId, quest);
@@ -2940,11 +3486,273 @@ index 01595edf..c1d6b1d1 100644
      return false;
  }
  
+@@ -68,6 +78,12 @@ bool NewRpgStatusUpdateAction::Execute(Event event)
+     {
+         case RPG_IDLE:
+         {
++            // NovaCore: autopilotui uzduotys yra svarbiausios (~85 %), kai yra bent viena nenutraukta uzduotis; pardavimas ir
++            // atidavimas vyksta atskirais triggeriais (NovaAutopilotActions), todel cia jokio vendoriaus netrukdom.
++            if (NovaIsAutopilot(bot) && !bot->IsInCombat() && urand(0, 99) < 85 && CheckRpgStatusAvailable(RPG_DO_QUEST) &&
++                RandomChangeStatus({RPG_DO_QUEST}))
++                return true;
++
+             return RandomChangeStatus({RPG_GO_CAMP, RPG_GO_GRIND, RPG_WANDER_RANDOM, RPG_WANDER_NPC, RPG_DO_QUEST,
+                                        RPG_TRAVEL_FLIGHT, RPG_REST});
+         }
+@@ -238,9 +254,165 @@ bool NewRpgDoQuestAction::Execute(Event event)
+     return true;
+ }
+ 
++// ---------------------------------------------------------------- NovaCore: autopilotas
++
++namespace
++{
++    struct NovaEnderPos
++    {
++        uint16 map;
++        float x, y, z;
++    };
++
++    std::mutex novaEnderMutex;
++    std::unordered_map<uint32, std::vector<NovaEnderPos>> novaEnderCache;
++
++    // Visos uzduoties atidavimo vietos (NPC ir objektai) is spawn duomenu; skaiciuojama vieną kartą vienai uzduociai.
++    std::vector<NovaEnderPos> const& NovaEnderPositions(uint32 questId)
++    {
++        std::lock_guard<std::mutex> guard(novaEnderMutex);
++        auto it = novaEnderCache.find(questId);
++        if (it != novaEnderCache.end())
++            return it->second;
++
++        std::vector<NovaEnderPos>& v = novaEnderCache[questId];
++        std::unordered_set<uint32> creatures, objects;
++        for (auto const& kv : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
++            if (kv.second == questId)
++                creatures.insert(kv.first);
++        for (auto const& kv : *sObjectMgr->GetGOQuestInvolvedRelationMap())
++            if (kv.second == questId)
++                objects.insert(kv.first);
++
++        if (!creatures.empty())
++            for (auto const& kv : sObjectMgr->GetAllCreatureData())
++            {
++                CreatureData const& d = kv.second;
++                if (creatures.count(d.id1) || creatures.count(d.id2) || creatures.count(d.id3))
++                    v.push_back({ d.mapid, d.posX, d.posY, d.posZ });
++            }
++
++        if (!objects.empty())
++            for (auto const& kv : sObjectMgr->GetAllGOData())
++                if (objects.count(kv.second.id))
++                    v.push_back({ kv.second.mapid, kv.second.posX, kv.second.posY, kv.second.posZ });
++
++        return v;
++    }
++}
++
++bool NewRpgDoQuestAction::NovaFindEnderPos(uint32 questId, WorldPosition& out)
++{
++    std::vector<NovaEnderPos> const& v = NovaEnderPositions(questId);
++    float best = FLT_MAX;
++    bool found = false;
++    for (NovaEnderPos const& p : v)
++    {
++        if (p.map != bot->GetMapId())
++            continue;
++
++        float const d = bot->GetDistance2d(p.x, p.y);
++        if (d < best)
++        {
++            best = d;
++            out = WorldPosition(p.map, p.x, p.y, p.z);
++            found = true;
++        }
++    }
++    return found;
++}
++
++bool NewRpgDoQuestAction::NovaUseOrApproach(GameObject* go)
++{
++    if (go->IsWithinDistInMap(bot, INTERACTION_DISTANCE - 1.0f))
++    {
++        WorldPacket p(CMSG_GAMEOBJ_USE);
++        p << go->GetGUID();
++        bot->GetSession()->HandleGameObjectUseOpcode(p);
++        ForceToWait(4000);
++        LOG_INFO("playerbots", "Autopilotas {}: naudoja objekta {} uzduociai", bot->GetName(), go->GetEntry());
++        return true;
++    }
++
++    MoveWorldObjectTo(go->GetGUID(), 2.0f);
++    return true;
++}
++
++// Uzduociu tikslai, kuriu botai pagal nutylejima nedaro: objektu naudojimas (RequiredNpcOrGo < 0) ir daiktai is objektu
++// (knygos, skrynios su uzduoties daiktais). Daiktus is moku renka grind.
++bool NewRpgDoQuestAction::NovaWorkQuestObjects(uint32 questId)
++{
++    Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
++    auto const& statusMap = bot->getQuestStatusMap();
++    auto sit = statusMap.find(questId);
++    if (!quest || sit == statusMap.end())
++        return false;
++
++    QuestStatusData const& qs = sit->second;
++
++    // 1) tikslai „naudoti objekta“
++    for (int i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
++    {
++        int32 const req = quest->RequiredNpcOrGo[i];
++        if (req >= 0 || qs.CreatureOrGOCount[i] >= quest->RequiredNpcOrGoCount[i])
++            continue;
++
++        if (GameObject* go = bot->FindNearestGameObject(uint32(-req), 150.0f, true))
++            return NovaUseOrApproach(go);
++    }
++
++    // 2) uzduoties daiktai is objektu su grobiu
++    for (int i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
++    {
++        if (!quest->RequiredItemId[i] || qs.ItemCount[i] >= quest->RequiredItemCount[i])
++            continue;
++
++        GuidVector objects = AI_VALUE(GuidVector, "nearest game objects no los");
++        GameObject* best = nullptr;
++        float bestDist = FLT_MAX;
++        for (ObjectGuid const& guid : objects)
++        {
++            GameObject* go = ObjectAccessor::GetGameObject(*bot, guid);
++            if (!go || !go->isSpawned() || !go->GetGOInfo())
++                continue;
++
++            uint32 const lootId = go->GetGOInfo()->GetLootId();
++            if (!lootId || !LootTemplates_Gameobject.HaveQuestLootForPlayer(lootId, bot))
++                continue;
++
++            float const d = bot->GetDistance(go);
++            if (d < bestDist)
++            {
++                bestDist = d;
++                best = go;
++            }
++        }
++
++        if (!best)
++            continue;
++
++        if (bestDist < INTERACTION_DISTANCE + 1.0f)
++        {
++            AI_VALUE(LootObjectStack*, "available loot")->Add(best->GetGUID());
++            ForceToWait(2000);
++            LOG_INFO("playerbots", "Autopilotas {}: renka daikta is objekto {} (uzduotis {})", bot->GetName(), best->GetEntry(),
++                     questId);
++            return true;
++        }
++
++        MoveWorldObjectTo(best->GetGUID(), 2.0f);
++        return true;
++    }
++
++    return false;
++}
++
+ bool NewRpgDoQuestAction::DoIncompleteQuest()
+ {
+     uint32 questId = RPG_INFO(do_quest, questId);
++    if (NovaIsAutopilot(bot) && NovaWorkQuestObjects(questId))
++        return true;
++
+     if (botAI->rpgInfo.do_quest.pos != WorldPosition())
+     {
+         /// @TODO: extract to a new function
+@@ -353,6 +525,26 @@ bool NewRpgDoQuestAction::DoCompletedQuest()
+     uint32 questId = RPG_INFO(quest, questId);
+     const Quest* quest = RPG_INFO(quest, quest);
+ 
++    // NovaCore: autopilotas eina tiesiai pas uzduoties atidavejo NPC (spawn pozicija), o ne i POI vidurki – POI daznai
++    // neturi tinkamo aukscio / zonos ir uzduotis taip ir lieka neatiduota.
++    if (NovaIsAutopilot(bot) && (RPG_INFO(quest, objectiveIdx) != -1 || RPG_INFO(quest, pos) == WorldPosition()))
++    {
++        WorldPosition ender;
++        if (NovaFindEnderPos(questId, ender))
++        {
++            BroadcastHelper::BroadcastQuestUpdateComplete(botAI, bot, quest);
++            botAI->rpgStatistic.questCompleted++;
++            LOG_INFO("playerbots", "Autopilotas {}: atiduos uzduoti {} pas ({:.0f}, {:.0f}), atstumas {:.0f}", bot->GetName(),
++                     questId, ender.GetPositionX(), ender.GetPositionY(), bot->GetDistance2d(ender.GetPositionX(), ender.GetPositionY()));
++            botAI->rpgInfo.do_quest.lastReachPOI = 0;
++            botAI->rpgInfo.do_quest.pos = ender;
++            botAI->rpgInfo.do_quest.objectiveIdx = -1;
++        }
++        else
++            LOG_INFO("playerbots", "Autopilotas {}: uzduociai {} nerastas atidavejas zemelapyje {}", bot->GetName(), questId,
++                     bot->GetMapId());
++    }
++
+     if (RPG_INFO(quest, objectiveIdx) != -1)
+     {
+         // if quest is completed, back to poi with -1 idx to reward
+diff --git a/src/strategy/rpg/NewRpgAction.h b/src/strategy/rpg/NewRpgAction.h
+index 76692537..6bd9f9dc 100644
+--- a/src/strategy/rpg/NewRpgAction.h
++++ b/src/strategy/rpg/NewRpgAction.h
+@@ -93,6 +93,12 @@ protected:
+     bool DoIncompleteQuest();
+     bool DoCompletedQuest();
+ 
++    // NovaCore: zaidejo autopilotas – patikimas uzduociu atidavimas (pagal tikra uzduoties NPC, ne POI vidurki)
++    // ir objektu (knygos, sventoves, skrynios) uzduociu vykdymas.
++    bool NovaFindEnderPos(uint32 questId, WorldPosition& out);
++    bool NovaWorkQuestObjects(uint32 questId);
++    bool NovaUseOrApproach(GameObject* go);
++
+     const uint32 poiStayTime = 5 * 60 * 1000;
+ };
+ 
 diff --git a/src/strategy/rpg/NewRpgBaseAction.cpp b/src/strategy/rpg/NewRpgBaseAction.cpp
-index 5e71c5c5..86bb4bb6 100644
+index 5e71c5c5..c4efb85c 100644
 --- a/src/strategy/rpg/NewRpgBaseAction.cpp
 +++ b/src/strategy/rpg/NewRpgBaseAction.cpp
-@@ -236,7 +236,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
+@@ -20,6 +20,7 @@
+ #include "PlayerbotAI.h"
+ #include "PlayerbotAIConfig.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "Position.h"
+ #include "QuestDef.h"
+ #include "Random.h"
+@@ -54,8 +55,20 @@ bool NewRpgBaseAction::MoveFarTo(WorldPosition dest)
+         botAI->rpgInfo.stuckTs = getMSTime();
+         botAI->rpgInfo.stuckAttempts = 0;
+     }
+-    else if (++botAI->rpgInfo.stuckAttempts >= 10 && GetMSTimeDiffToNow(botAI->rpgInfo.stuckTs) >= stuckTime)
++    else if (++botAI->rpgInfo.stuckAttempts >= 10 &&
++             GetMSTimeDiffToNow(botAI->rpgInfo.stuckTs) >= (NovaIsAutopilot(bot) ? 90000u : stuckTime))
+     {
++        // NovaCore: zaidejo autopilotas niekada netelportuojamas "kiaurai pasaulio" – atsisakom sio tikslo ir renkames kita
++        if (NovaIsAutopilot(bot))
++        {
++            botAI->rpgInfo.stuckTs = getMSTime();
++            botAI->rpgInfo.stuckAttempts = 0;
++            LOG_INFO("playerbots", "Autopilotas {}: nepavyksta pasiekti tikslo ({:.0f}, {:.0f}) – atsisakom", bot->GetName(),
++                     dest.GetPositionX(), dest.GetPositionY());
++            botAI->rpgInfo.ChangeToIdle();
++            return false;
++        }
++
+         // Unfortunately we've been stuck here for over 5 mins, fallback to teleporting directly to the destination
+         botAI->rpgInfo.stuckTs = getMSTime();
+         botAI->rpgInfo.stuckAttempts = 0;
+@@ -71,7 +84,7 @@ bool NewRpgBaseAction::MoveFarTo(WorldPosition dest)
+     }
+ 
+     float dis = bot->GetExactDist(dest);
+-    if (dis < pathFinderDis)
++    if (dis < pathFinderDis || NovaIsAutopilot(bot))   // NovaCore: autopilotui MoveTo pats dalija ilga kelia saugiais etapais
+     {
+         return MoveTo(dest.getMapId(), dest.GetPositionX(), dest.GetPositionY(), dest.GetPositionZ(), false, false,
+                       false, true);
+@@ -236,7 +249,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
          {
              AcceptQuest(quest, guid);
              if (botAI->GetMaster())
@@ -2953,7 +3761,7 @@ index 5e71c5c5..86bb4bb6 100644
              BroadcastHelper::BroadcastQuestAccepted(botAI, bot, quest);
              botAI->rpgStatistic.questAccepted++;
              LOG_DEBUG("playerbots", "[New RPG] {} accept quest {}", bot->GetName(), quest->GetQuestId());
-@@ -245,7 +245,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
+@@ -245,7 +258,7 @@ bool NewRpgBaseAction::InteractWithNpcOrGameObjectForQuest(ObjectGuid guid)
          {
              TurnInQuest(quest, guid);
              if (botAI->GetMaster())
@@ -2962,7 +3770,7 @@ index 5e71c5c5..86bb4bb6 100644
              BroadcastHelper::BroadcastQuestTurnedIn(botAI, bot, quest);
              botAI->rpgStatistic.questRewarded++;
              LOG_DEBUG("playerbots", "[New RPG] {} turned in quest {}", bot->GetName(), quest->GetQuestId());
-@@ -535,7 +535,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+@@ -535,7 +548,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
              packet << (uint8)i;
              bot->GetSession()->HandleQuestLogRemoveQuest(packet);
              if (botAI->GetMaster())
@@ -2971,7 +3779,7 @@ index 5e71c5c5..86bb4bb6 100644
              botAI->rpgStatistic.questDropped++;
              dropped++;
          }
-@@ -560,7 +560,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+@@ -560,7 +573,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
              packet << (uint8)i;
              bot->GetSession()->HandleQuestLogRemoveQuest(packet);
              if (botAI->GetMaster())
@@ -2980,7 +3788,7 @@ index 5e71c5c5..86bb4bb6 100644
              botAI->rpgStatistic.questDropped++;
              dropped++;
          }
-@@ -582,7 +582,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
+@@ -582,7 +595,7 @@ bool NewRpgBaseAction::OrganizeQuestLog()
          packet << (uint8)i;
          bot->GetSession()->HandleQuestLogRemoveQuest(packet);
          if (botAI->GetMaster())
@@ -2989,6 +3797,24 @@ index 5e71c5c5..86bb4bb6 100644
          botAI->rpgStatistic.questDropped++;
      }
  
+@@ -1120,6 +1133,17 @@ bool NewRpgBaseAction::RandomChangeStatus(std::vector<NewRpgStatus> candidateSta
+                     availableQuests.push_back(questId);
+                 }
+             }
++            // NovaCore: autopilotas pirmiausia atiduoda jau ivykdytas uzduotis
++            if (NovaIsAutopilot(bot))
++            {
++                std::vector<uint32> completed;
++                for (uint32 qid : availableQuests)
++                    if (bot->GetQuestStatus(qid) == QUEST_STATUS_COMPLETE)
++                        completed.push_back(qid);
++                if (!completed.empty())
++                    availableQuests = completed;
++            }
++
+             if (availableQuests.size())
+             {
+                 uint32 questId = availableQuests[urand(0, availableQuests.size() - 1)];
 diff --git a/src/strategy/triggers/LfgTriggers.cpp b/src/strategy/triggers/LfgTriggers.cpp
 index aa170e2b..4b23b38c 100644
 --- a/src/strategy/triggers/LfgTriggers.cpp
@@ -3063,32 +3889,41 @@ index 1c493b18..28e48179 100644
 +
  #endif
 diff --git a/src/strategy/triggers/TriggerContext.h b/src/strategy/triggers/TriggerContext.h
-index 984c1dea..341f47b7 100644
+index 984c1dea..cee402ec 100644
 --- a/src/strategy/triggers/TriggerContext.h
 +++ b/src/strategy/triggers/TriggerContext.h
-@@ -9,6 +9,7 @@
+@@ -9,6 +9,8 @@
  #include "CureTriggers.h"
  #include "GenericTriggers.h"
  #include "GuildTriggers.h"
 +#include "AuctionShoppingTrigger.h"
++#include "NovaAutopilotTriggers.h"
  #include "LfgTriggers.h"
  #include "LootTriggers.h"
  #include "NamedObjectContext.h"
-@@ -149,6 +150,8 @@ public:
+@@ -149,6 +151,12 @@ public:
          creators["medium group heal setting"] = &TriggerContext::medium_group_heal_occasion;
          creators["invalid target"] = &TriggerContext::invalid_target;
          creators["lfg proposal active"] = &TriggerContext::lfg_proposal_active;
 +        creators["lfg teleport pending"] = &TriggerContext::lfg_teleport_pending;
 +        creators["ah shopping"] = &TriggerContext::ah_shopping;
++        creators["nova turn in"] = &TriggerContext::nova_turn_in;               // NovaCore
++        creators["nova quest objects"] = &TriggerContext::nova_quest_objects;   // NovaCore
++        creators["nova bags full"] = &TriggerContext::nova_bags_full;           // NovaCore
++        creators["nova quest mobs"] = &TriggerContext::nova_quest_mobs;         // NovaCore
  
          creators["unknown dungeon"] = &TriggerContext::unknown_dungeon;
  
-@@ -245,6 +248,8 @@ private:
+@@ -245,6 +253,12 @@ private:
      static Trigger* has_rpg_target(PlayerbotAI* botAI) { return new HasRpgTargetTrigger(botAI); }
      static Trigger* collision(PlayerbotAI* botAI) { return new CollisionTrigger(botAI); }
      static Trigger* lfg_proposal_active(PlayerbotAI* botAI) { return new LfgProposalActiveTrigger(botAI); }
 +    static Trigger* lfg_teleport_pending(PlayerbotAI* botAI) { return new LfgTeleportPendingTrigger(botAI); }
 +    static Trigger* ah_shopping(PlayerbotAI* botAI) { return new AuctionShoppingTrigger(botAI); }
++    static Trigger* nova_turn_in(PlayerbotAI* botAI) { return new NovaTurnInTrigger(botAI); }
++    static Trigger* nova_quest_objects(PlayerbotAI* botAI) { return new NovaQuestObjectsTrigger(botAI); }
++    static Trigger* nova_bags_full(PlayerbotAI* botAI) { return new NovaBagsFullTrigger(botAI); }
++    static Trigger* nova_quest_mobs(PlayerbotAI* botAI) { return new NovaQuestMobsTrigger(botAI); }
      static Trigger* unknown_dungeon(PlayerbotAI* botAI) { return new UnknownDungeonTrigger(botAI); }
      static Trigger* invalid_target(PlayerbotAI* botAI) { return new InvalidTargetTrigger(botAI); }
      static Trigger* critical_aoe_heal(PlayerbotAI* botAI)
@@ -3109,6 +3944,60 @@ index 27e1c99e..3fdca389 100644
          return false;
      }
  
+diff --git a/src/strategy/values/GrindTargetValue.cpp b/src/strategy/values/GrindTargetValue.cpp
+index cd368741..dfe7547a 100644
+--- a/src/strategy/values/GrindTargetValue.cpp
++++ b/src/strategy/values/GrindTargetValue.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "NewRpgInfo.h"
+ #include "Playerbots.h"
++#include "PlayerbotRotation.h"   // NovaCore
+ #include "ReputationMgr.h"
+ #include "ServerFacade.h"
+ #include "SharedDefines.h"
+@@ -56,6 +57,22 @@ Unit* GrindTargetValue::FindTargetForGrinding(uint32 assistCount)
+     Unit* result = nullptr;
+     std::unordered_map<uint32, bool> needForQuestMap;
+ 
++    // NovaCore: zaidejo autopilotas taikosi TIK i uzduociu mobus, kol turi bet kokiu uzduociu darbo – nebaigtu ARBA
++    // ivykdytu, bet dar neatiduotu (tada eina atiduoti, o ne zudo toliau). Tik be jokiu uzduociu (zurnale nera nieko,
++    // ko nepaliktume 'zemo prioriteto') lieka atsarginis grindas: tinkamo lygio mobai (ne zemesni nei savo lygis - 2).
++    bool const autopilot = NovaIsAutopilot(bot);
++    bool hasOpenQuests = false;
++    if (autopilot)
++    {
++        for (auto const& q : bot->getQuestStatusMap())
++            if ((q.second.Status == QUEST_STATUS_INCOMPLETE || q.second.Status == QUEST_STATUS_COMPLETE) &&
++                botAI->lowPriorityQuest.find(q.first) == botAI->lowPriorityQuest.end())
++            {
++                hasOpenQuests = true;
++                break;
++            }
++    }
++
+     for (ObjectGuid const guid : targets)
+     {
+         Unit* unit = botAI->GetUnit(guid);
+@@ -101,6 +118,18 @@ Unit* GrindTargetValue::FindTargetForGrinding(uint32 assistCount)
+         if (!bot->InBattleground() && (int)unit->GetLevel() - (int)bot->GetLevel() > 4 && !unit->GetGUID().IsPlayer())
+             continue;
+ 
++        if (autopilot && !bot->InBattleground() && !unit->GetGUID().IsPlayer())
++        {
++            if (needForQuestMap.find(unit->GetEntry()) == needForQuestMap.end())
++                needForQuestMap[unit->GetEntry()] = needForQuest(unit);
++
++            bool const need = needForQuestMap[unit->GetEntry()];
++            if (hasOpenQuests && !need)
++                continue;
++            if (!need && (int)bot->GetLevel() - (int)unit->GetLevel() > 2)
++                continue;
++        }
++
+         if (Creature* creature = unit->ToCreature())
+             if (CreatureTemplate const* CreatureTemplate = creature->GetCreatureTemplate())
+                 if (CreatureTemplate->rank > CREATURE_ELITE_NORMAL && !AI_VALUE(bool, "can fight elite"))
 diff --git a/src/strategy/values/Stances.cpp b/src/strategy/values/Stances.cpp
 index 1cd97a39..6f34328b 100644
 --- a/src/strategy/values/Stances.cpp
