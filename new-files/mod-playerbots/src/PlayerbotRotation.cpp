@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "Event.h"
 #include "Timer.h"
+#include "LfgTriggers.h"   // NovaClearStaleFalling
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -237,6 +238,7 @@ bool PlayerbotRotationMgr::EnableAutopilot(Player* player, std::string& reply)
     SetupAutopilotCharacter(player, botAI);
 
     // Serverio varomas judejimas: klientas neturi siusti savo pozicijos, kitaip abu tempia veikeja i skirtingas puses.
+    player->SetFallInformation(0, player->GetPositionZ());
     player->SetClientControl(player, false);
 
     reply = TXT_AP_ON;
@@ -300,8 +302,17 @@ bool PlayerbotRotationMgr::Disable(Player* player, std::string& reply)
 
         if (wasAutopilot && player->GetSession())
         {
+            // Diagnostika: zaidejai skundesi, kad isjungus autopiloto mygtuka veikejas netenka ~puses gyvybiu (kritimo zala?).
+            float const gz = player->GetMap() ? player->GetMap()->GetHeight(player->GetPhaseMask(), player->GetPositionX(), player->GetPositionY(),
+                                                                          player->GetPositionZ() + 2.0f, true) : player->GetPositionZ();
+            LOG_INFO("playerbots", "Autopilotas {}: isjungiamas, HP {}/{}, z {:.1f}, zemes z {:.1f}, krenta {}, judejimo vėliavos {:#x}",
+                     player->GetName(), player->GetHealth(), player->GetMaxHealth(), player->GetPositionZ(), gz,
+                     player->IsFalling() ? "taip" : "ne", uint32(player->GetUnitMovementFlags()));
+
             player->StopMoving();
             player->GetMotionMaster()->Clear();
+            // pasenusi kritimo informacija (is laiko prie autopilota) galetu duoti didele kritimo zala pirmo zaidejo zingsnio metu
+            player->SetFallInformation(0, player->GetPositionZ());
             player->SetClientControl(player, true);
         }
     }
@@ -414,6 +425,53 @@ void PlayerbotRotationMgr::PreAction(PlayerbotAI* botAI)
     if (!bot || !botAI->IsRealPlayer())
         return;
 
+    // Autopilotas: likutine „krenta“ busena (botas/zaidejas be kliento nusileidimo) rodo „skridimo“ animacija ir blokuoja teleportus
+    if (IsAutopilot(bot->GetGUID()) && bot->IsAlive() && !bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
+        NovaClearStaleFalling(bot);
+
+    // Autopilotas: diagnostika – ar veikejas neperejo kiaurai statiniu kliuciu. Kas ~1 s lyginam su ankstesne pozicija; jei tarp ju
+    // nera tiesioginio matomumo (VMAP/WMO) – irasom i zurnala (ne dazniau nei kas 5 s), kad butu aisku, kur ir kaip tai nutinka.
+    if (IsAutopilot(bot->GetGUID()) && bot->IsAlive() && bot->IsInWorld() && !bot->IsFalling() && !bot->isSwimming() && !bot->IsFlying() &&
+        !bot->GetTransport() && !bot->GetVehicle() && !bot->IsInFlight() && !bot->IsBeingTeleported())
+    {
+        struct LastPos
+        {
+            uint32 map = 0;
+            float x = 0.0f, y = 0.0f, z = 0.0f;
+            uint32 t = 0;
+            uint32 warnedAt = 0;
+        };
+        static std::mutex lockPos;
+        static std::unordered_map<ObjectGuid, LastPos> lastPos;
+
+        uint32 const nowMs = getMSTime();
+        std::lock_guard<std::mutex> guard(lockPos);
+        LastPos& lp = lastPos[bot->GetGUID()];
+        if (!lp.t || nowMs - lp.t >= 1000)
+        {
+            float const cx = bot->GetPositionX(), cy = bot->GetPositionY(), cz = bot->GetPositionZ();
+            if (lp.t && lp.map == bot->GetMapId())
+            {
+                float const d = std::hypot(cx - lp.x, cy - lp.y);
+                if (d > 3.0f && d < 20.0f && nowMs - lp.warnedAt >= 5000 &&
+                    !bot->GetMap()->isInLineOfSight(lp.x, lp.y, lp.z + 1.4f, cx, cy, cz + 1.4f, bot->GetPhaseMask(),
+                                                    LineOfSightChecks(LINEOFSIGHT_CHECK_VMAP | LINEOFSIGHT_CHECK_GOBJECT_WMO),
+                                                    VMAP::ModelIgnoreFlags::Nothing))
+                {
+                    lp.warnedAt = nowMs;
+                    LOG_INFO("playerbots", "Autopilotas {}: KIAURAI KLIUTIES? ({:.0f}, {:.0f}, {:.1f}) -> ({:.0f}, {:.0f}, {:.1f}), zona {}",
+                             bot->GetName(), lp.x, lp.y, lp.z, cx, cy, cz, bot->GetZoneId());
+                }
+            }
+
+            lp.map = bot->GetMapId();
+            lp.x = cx;
+            lp.y = cy;
+            lp.z = cz;
+            lp.t = nowMs;
+        }
+    }
+
     // Autopilotas: kas ~10 s irasom busena i Playerbots.log (diagnostikai: kur yra, ka daro, kokie paskutiniai veiksmai).
     if (IsAutopilot(bot->GetGUID()))
     {
@@ -428,8 +486,10 @@ void PlayerbotRotationMgr::PreAction(PlayerbotAI* botAI)
             std::string actions = botAI->HandleRemoteCommand("action");
             if (actions.size() > 260)
                 actions = actions.substr(actions.size() - 260);
-            LOG_INFO("playerbots", "Autopilotas {} @ ({:.0f}, {:.0f}) zona {} lvl {} | variklis {} | rpg {} | laisvu vietu {} | veiksmai {}",
-                     bot->GetName(), bot->GetPositionX(), bot->GetPositionY(), bot->GetZoneId(), bot->GetLevel(),
+            float const groundZ = bot->GetMapHeight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+            LOG_INFO("playerbots", "Autopilotas {} @ ({:.0f}, {:.0f}, z {:.1f}, zeme {:.1f}, vel. 0x{:x}) zona {} lvl {} | variklis {} | rpg {} | laisvu vietu {} | veiksmai {}",
+                     bot->GetName(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), groundZ,
+                     bot->m_movementInfo.GetMovementFlags(), bot->GetZoneId(), bot->GetLevel(),
                      uint32(botAI->GetState()), st < 8 ? rpgNames[st] : "?", bot->GetFreeInventorySpace(), actions);
         }
     }

@@ -45,12 +45,95 @@ public:
     bool Execute(Event event) override;
 };
 
+// Uzduociu daiktu / burtu naudojimas ant uzduociu tiksliniu NPC ir objektu: pagydyti isgyvenusiuosius (Gift of the Naaru),
+// panaudoti uzduociu daikta ant mobo / objekto, pasikalbeti su NPC. Parinktys keiciamos kas bandyma.
+class NovaQuestUseAction : public NewRpgBaseAction
+{
+public:
+    NovaQuestUseAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova quest use") {}
+    bool Execute(Event event) override;
+};
+
+// Strand of the Ancients (SA): playerbots neturi sios kovos lauko taktikos – botai stovi vietoje. Atakuojantys eina prie esamu
+// vartu ir juos „griauna“ (be vezimu, serveriu pusėje – ModifyHealth), po to ima relikvija; ginantys stoja uz tuo vartu.
+class NovaSaAction : public NewRpgBaseAction
+{
+public:
+    NovaSaAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova sa") {}
+    bool Execute(Event event) override;
+};
+
+// Ar botas SA kovos lauke vyksta raundas (po pasiruosimo), jis gyvas ir ne kovoje.
+bool NovaSaActive(Player* bot);
+
+// Kuprines daiktai: (1) daiktai, kurie pradeda uzduoti (iskrite is mobu) – priimama iskart; (2) stiprinamieji daiktai (eliksyrai,
+// flakonai, svitkai su ilgai trunkancia aura sau) – panaudojami, kai aura nenuimta.
+class NovaItemsAction : public NewRpgBaseAction
+{
+public:
+    NovaItemsAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova items") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaHasUsefulItems(Player* bot, PlayerbotAI* botAI);
+
+// Amunicija: veikejas su lanku / arbaletu / ginklu (medziotojas, plesikas, karys) be strielu nemoka naudoti Auto Shot, Arcane
+// Shot ir kitu nuotoliniu burtu (jie „IMPOSSIBLE“). Autopilotui visada palaikoma tinkama amunicija (600 vnt.) ir ekipuojama.
+class NovaAmmoAction : public NewRpgBaseAction
+{
+public:
+    NovaAmmoAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova ammo") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaNeedsAmmo(Player* bot, PlayerbotAI* botAI);
+
+// Uzduociu daiktai, kuriu burtui reikia „spell focus“ objekto salia (pvz. „Medzio persirengimo rinkinys“ prie Nagu veliavos –
+// uzduotis „Medzio draugija“): nueina prie objekto, panaudoja daikta ir laukia, kol ivyks ivykis ir bus ikeltas kreditas.
+class NovaQuestFocusAction : public NewRpgBaseAction
+{
+public:
+    NovaQuestFocusAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova quest focus") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaHasQuestFocus(Player* bot, PlayerbotAI* botAI);
+
+// Zonu kaita pagal lygi: jei aplinkiniai priesai gerokai zemesnio lygio nei veikejas (pvz. 12 lygio veikejas starto zonoje), autopilotas
+// persikelia i jo lygiui tinkama vieta (kaip atsitiktiniai botai, is „starter per level“ vietu). Kaupia kas ~90 s, ne daugiau 2 kartu per lygi.
+class NovaZoneAction : public NewRpgBaseAction
+{
+public:
+    NovaZoneAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova zone") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaZoneNeedsMove(Player* bot, PlayerbotAI* botAI);
+
+// Augalai ir ruda: veikejas su zolininkyste / kasyba, pamates netoli (iki 45 jardu) renkama augala ar gysla, nueina ir surenka
+// (standartinis „gather“ veiksmas su relevance 5 dingsta po autopilotu veiksmais, todel niekada nesuveikdavo).
+class NovaGatherAction : public NewRpgBaseAction
+{
+public:
+    NovaGatherAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova gather") {}
+    bool Execute(Event event) override;
+};
+
+// Ar netoli yra renkamas augalas / ruda (pagal veikejo igudzius, igudzio lygi ir kasimo kirti).
+bool NovaHasGatherNode(Player* bot, PlayerbotAI* botAI);
+
 // Bendros salygos: autopilotas gyvas, ne kovoje, ne skrenda, ne teleportuojasi, ne musio lauke / pozemyje.
 bool NovaAutopilotFree(Player* bot, PlayerbotAI* botAI);
 // Pirma ivykdyta (nenutraukta) uzduotis, kuriai zinoma atidavimo vieta siame zemelapyje.
 bool NovaFindCompletedQuest(Player* bot, PlayerbotAI* botAI, uint32& questId, WorldPosition& pos);
 // Ar yra uzduociu su objektu tikslais.
 bool NovaHasObjectQuests(Player* bot, PlayerbotAI* botAI);
+// Ar netoli yra uzduoties tikslinis NPC / objektas, su kuriuo galima ka nors padaryti (zr. NovaQuestUseAction).
+bool NovaHasQuestUseTarget(Player* bot, PlayerbotAI* botAI);
+// Atidavimas „viskas is karto“: grazina true, kai laikas eiti atiduoti ivykdytas uzduotis – t. y. yra ka atiduoti IR (nebeliko
+// darbo nebaigtoms uzduotims ARBA bot'as jau prie atidavejo ARBA 4 min. nera jokios pazangos ARBA zurnalas beveik pilnas). Prasidejus
+// atidavimui jis tesiasi, kol nebeliks atiduotinu uzduociu (naujai priimtos uzduotys jo nenutraukia).
+bool NovaTurnInGateOpen(Player* bot, PlayerbotAI* botAI);
 // Ar yra nebaigtu uzduociu su moku tikslais (nukauti X arba surinkti daikta, krentanti is moku).
 bool NovaHasKillQuests(Player* bot, PlayerbotAI* botAI);
 // Laisvu kuprines vietu <= 25 % visos talpos (ne maziau kaip 3).

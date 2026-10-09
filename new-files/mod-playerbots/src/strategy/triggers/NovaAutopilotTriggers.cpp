@@ -12,9 +12,8 @@ bool NovaTurnInTrigger::IsActive()
     if (!NovaAutopilotFree(bot, botAI))
         return false;
 
-    uint32 questId = 0;
-    WorldPosition pos;
-    return NovaFindCompletedQuest(bot, botAI, questId, pos);
+    // atidavimas – tik kai nebeliko darbo nebaigtoms uzduotims (zr. NovaTurnInGateOpen), tada visos uzduotys is karto
+    return NovaTurnInGateOpen(bot, botAI);
 }
 
 bool NovaQuestObjectsTrigger::IsActive()
@@ -33,9 +32,7 @@ bool NovaQuestMobsTrigger::IsActive()
         return false;
 
     // pirmenybe: atiduoti ivykdyta uzduoti ir parduoti pilna kuprine (jie turi savo trigerius) – kitaip botas blaskosi
-    uint32 pendingQuest = 0;
-    WorldPosition pendingPos;
-    if (NovaFindCompletedQuest(bot, botAI, pendingQuest, pendingPos) || NovaNeedsVendor(bot))
+    if (NovaTurnInGateOpen(bot, botAI) || NovaNeedsVendor(bot))
         return false;
 
     // matomas uzduociu mobas – tuo pasirupina „attack anything“; cia reikia tik tada, kai matomu nera
@@ -43,4 +40,51 @@ bool NovaQuestMobsTrigger::IsActive()
         return false;
 
     return NovaHasKillQuests(bot, botAI);
+}
+
+bool NovaQuestUseTrigger::IsActive()
+{
+    if (!NovaAutopilotFree(bot, botAI))
+        return false;
+
+    return NovaHasQuestUseTarget(bot, botAI);
+}
+
+bool NovaSaTrigger::IsActive()
+{
+    return NovaSaActive(bot);
+}
+
+bool NovaGatherTrigger::IsActive()
+{
+    if (!NovaAutopilotFree(bot, botAI))
+        return false;
+
+    return NovaHasGatherNode(bot, botAI);
+}
+
+bool NovaQuestFocusTrigger::IsActive()
+{
+    if (!NovaAutopilotFree(bot, botAI))
+        return false;
+
+    return NovaHasQuestFocus(bot, botAI);
+}
+
+bool NovaAmmoTrigger::IsActive()
+{
+    return NovaNeedsAmmo(bot, botAI);
+}
+
+bool NovaItemsTrigger::IsActive()
+{
+    if (!NovaAutopilotFree(bot, botAI))
+        return false;
+
+    return NovaHasUsefulItems(bot, botAI);
+}
+
+bool NovaZoneTrigger::IsActive()
+{
+    return NovaZoneNeedsMove(bot, botAI);
 }
