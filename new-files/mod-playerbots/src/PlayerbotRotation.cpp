@@ -14,6 +14,8 @@
 #include "ObjectAccessor.h"
 #include "NewRpgInfo.h"
 #include "Player.h"
+#include "Spell.h"
+#include "SpellInfo.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotMgr.h"
@@ -21,7 +23,9 @@
 #include "ScriptMgr.h"
 #include "WorldSession.h"
 
+#include <atomic>
 #include <mutex>
+#include <unordered_map>
 
 using namespace Acore::ChatCommands;
 
@@ -146,6 +150,10 @@ bool PlayerbotRotationMgr::AttachAI(Player* player, std::string& reply, Playerbo
     if (player->isAFK())
         player->ToggleAFK();
 
+    // Aktyvumas perskaiciuojamas iskart: nauju AI „AllowActivity“ pirmas ~5 s grazina false, o tada variklis veikia „minimaliu“
+    // rezimu (vykdomi tik veiksmai, kuriu svarba >= 100) – rotacijos gebejimai nebūtų naudojami.
+    botAI->AllowActivity(ALL_ACTIVITY, true);
+
     return true;
 }
 
@@ -157,12 +165,6 @@ bool PlayerbotRotationMgr::Enable(Player* player, bool allowMove, std::string& r
     if (!LevelAllows(RotationLevel(), player))
     {
         reply = "Automatinė rotacija šiame serveryje išjungta.";
-        return false;
-    }
-
-    if (player->InBattleground() || player->InArena())
-    {
-        reply = "Mūšio laukuose ir arenose automatinė rotacija negalima.";
         return false;
     }
 
@@ -182,6 +184,8 @@ bool PlayerbotRotationMgr::Enable(Player* player, bool allowMove, std::string& r
         State& st = _states[player->GetGUID()];
         st.allowMove = allowMove;
         st.autopilot = false;
+        st.inBg = player->InBattleground() || player->InArena();
+        st.lastChoice = ObjectGuid::Empty;
     }
 
     // Pilnas strategiju perkrovimas pagal dabartinę klasę, specializaciją ir lygį; Apply() jį apriboja.
@@ -369,11 +373,22 @@ void PlayerbotRotationMgr::Apply(PlayerbotAI* botAI)
         return;
     }
 
-    // Ne kovos ir mirties varikliai tušti: AI veikia tik kovoje, niekada nerenka grobio, nekalbasi, neatsikelia ir pan.
-    botAI->ClearStrategies(BOT_STATE_NON_COMBAT);
+    // Ne kovos variklis: paliekama TIK klases priežiūra (buffai, auros, augintiniai ir jų gebėjimai, gydymas ir prikėlimas –
+    // tai, ką AiFactory prideda pagal klasę ir specializaciją), o viskas, kas juda, kalbasi, renka grobį, priima užduotis ar
+    // atakuoja pati – pašalinta. „nova guard“ nulina likusius netikėtus veiksmus (daiktų keitimas, slėpimosi nuėmimas ir pan.).
+    // Mirties variklis tuščias: AI nesikalba ir neatsikelia pati.
+    botAI->ChangeStrategy("-chat,-default,-follow,-stay,-food,-quest,-accept all quests,-loot,-gather,-reveal,-duel,-start duel,"
+                          "-pvp,-mount,-emote,-dps assist,-tank assist,-dps aoe,-attack tagged,-grind,-rpg,-new rpg,-travel,"
+                          "-explore,-map,-map full,-move random,-bg,-lfg,-battleground,-warsong,-alterac,-arathi,-eye,-isle,"
+                          "-arena,-maintenance,-group,-guild,-collision,-save mana,-worldbuff,-formation,-return,-guard,"
+                          "-runaway,-flee from adds,-move from group,-sit,-ready check,-rtsc,-custom,-mark rti,-debug,"
+                          "-debug move,-debug rpg,-debug spell,-debug quest,-tell target,-focus",
+                          BOT_STATE_NON_COMBAT);
+    botAI->ChangeStrategy("+nova guard", BOT_STATE_NON_COMBAT);
     botAI->ClearStrategies(BOT_STATE_DEAD);
 
-    std::string remove = "-chat,-default,-duel";
+    // Musio lauko / arenos taktikos (judejimas pagal tikslus, vėliavos, „arena tactics“) zaidejo rotacijai nereikalingos.
+    std::string remove = "-chat,-default,-duel,-warsong,-arathi,-alterac,-eye,-isle,-arena,-battleground,-bg";
     if (!allowMove)
         remove += ",-formation,-avoid aoe,-behind,-tank face,-flee";
     botAI->ChangeStrategy(remove, BOT_STATE_COMBAT);
@@ -416,6 +431,46 @@ namespace
             }
         }
         return best;
+    }
+
+    // Ka zaidejas pats puola: dabartinis smugio taikinys, kitaip pasirinktas priesas (jei galima pulti).
+    Unit* PlayerChoice(Player* bot)
+    {
+        Unit* t = bot->GetVictim();
+        if (ValidTarget(bot, t))
+            return t;
+
+        t = bot->GetSelectedUnit();
+        if (ValidTarget(bot, t) && !t->IsFriendlyTo(bot))
+            return t;
+
+        return nullptr;
+    }
+
+    // Zaidejas pradejo ataka, nors kovos zymos dar nera: kerta (automatinis smugis / Auto Shot / lazda) arba meta kenksminga burta i
+    // priesa. Naudinga, kad rotacija prasidetu is pirmo burto, o ne po pirmo smugio.
+    Unit* EngagedTarget(Player* bot)
+    {
+        Unit* v = bot->GetVictim();
+        if (ValidTarget(bot, v))
+            return v;
+
+        static CurrentSpellTypes const types[] = { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL, CURRENT_AUTOREPEAT_SPELL };
+        for (CurrentSpellTypes type : types)
+        {
+            Spell* spell = bot->GetCurrentSpell(type);
+            if (!spell)
+                continue;
+
+            SpellInfo const* info = spell->GetSpellInfo();
+            if (!info || info->IsPositive())
+                continue;
+
+            Unit* target = spell->m_targets.GetUnitTarget();
+            if (target && target != bot && ValidTarget(bot, target))
+                return target;
+        }
+        return nullptr;
     }
 }
 
@@ -498,33 +553,76 @@ void PlayerbotRotationMgr::PreAction(PlayerbotAI* botAI)
         return;
 
     // Tik paprasta rotacija (autopilotas kovos varikli perjungia pats, kaip botai, per „dps assist“ / „grind“).
+    bool const inBg = bot->InBattleground() || bot->InArena();
+    bool resetNeeded = false;
     {
-        std::shared_lock<std::shared_mutex> g(_lock);
+        std::unique_lock<std::shared_mutex> g(_lock);
         auto it = _states.find(bot->GetGUID());
         if (it == _states.end() || it->second.autopilot)
             return;
+        if (it->second.inBg != inBg)
+        {
+            it->second.inBg = inBg;
+            resetNeeded = true;
+        }
     }
 
-    BotState state = botAI->GetState();
-    if (bot->IsInCombat())
+    // Isejus is musio lauko / arenos ar i ji patekus strategijas reikia sukurti iš naujo (Apply() jas vėl apriboja).
+    if (resetNeeded)
     {
-        if (state != BOT_STATE_NON_COMBAT)
+        botAI->ResetStrategies();
+        return;
+    }
+
+    BotState const state = botAI->GetState();
+    if (state != BOT_STATE_NON_COMBAT && state != BOT_STATE_COMBAT)
+        return;      // mirties variklis – po prisikelimo AI pats grazina i ne kovos varikli
+
+    Unit* choice = PlayerChoice(bot);
+
+    if (state == BOT_STATE_NON_COMBAT)
+    {
+        // Kova prasideda ne tik tada, kai uzsidega kovos zyme: zaidejas jau kerta (automatinis smugis / Auto Shot) arba meta
+        // burta i priesa. Tada kovos varikli ijungiam is karto, nelaukdami, kol pirmas smugis „pagaus“ kova.
+        Unit* target = bot->IsInCombat() ? PickTarget(botAI, bot) : EngagedTarget(bot);
+        if (!target)
             return;
 
         // Perjungiam tik turint tinkama taikini (kitaip kovos variklio „invalid target“ iskart grazintu atgal ir kiekviena
         // AI cikla variklis butu perkraunamas). Mirus taikiniui automatiskai parenkamas kitas puolantis priesas.
-        Unit* target = PickTarget(botAI, bot);
-        if (!target)
-            return;
-
         botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-        bot->SetSelection(target->GetGUID());
+        if (bot->GetTarget() != target->GetGUID())
+            bot->SetSelection(target->GetGUID());
         botAI->ChangeEngine(BOT_STATE_COMBAT);
+
+        std::unique_lock<std::shared_mutex> g(_lock);
+        auto it = _states.find(bot->GetGUID());
+        if (it != _states.end())
+            it->second.lastChoice = choice ? choice->GetGUID() : target->GetGUID();
+        return;
     }
-    else if (state == BOT_STATE_COMBAT)
+
+    // Kovos variklis: iseinam, kai nebera nei kovos, nei zaidejo pradetos atakos.
+    if (!bot->IsInCombat() && !EngagedTarget(bot))
     {
         botAI->ChangeEngine(BOT_STATE_NON_COMBAT);
+        return;
     }
+
+    // Zaidejas pasirinko / pradejo pulti kita taikini – AI muša ta, ka rodo zaidejas (kitaip taikinys keistųsi tik AI nuožiūra).
+    ObjectGuid const choiceGuid = choice ? choice->GetGUID() : ObjectGuid::Empty;
+    bool changed = false;
+    {
+        std::unique_lock<std::shared_mutex> g(_lock);
+        auto it = _states.find(bot->GetGUID());
+        if (it != _states.end() && it->second.lastChoice != choiceGuid)
+        {
+            it->second.lastChoice = choiceGuid;
+            changed = !choiceGuid.IsEmpty();
+        }
+    }
+    if (changed && choice)
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(choice);
 }
 
 std::string PlayerbotRotationMgr::Describe(Player* player)
@@ -598,11 +696,16 @@ void PlayerbotRotationMgr::Update(uint32 diff)
         std::shared_lock<std::shared_mutex> g(_lock);
         for (auto const& kv : _states)
         {
-            Player* p = ObjectAccessor::FindPlayer(kv.first);
-            if (!p || !p->IsInWorld() || !GET_PLAYERBOT_AI(p))
+            // FindPlayer grazina null, kol veikejas nera pasaulyje (zemelapio keitimas: musio laukas, arena, pozemis, portalas – iki
+            // kliento patvirtinimo praeina kelios sekundes). Anksciau tada busena buvo istrinama ir rotacija / autopilotas tyliai
+            // nustodavo veikti, nors mygtukas liko zalias. Dabar issiregistruojam tik tada, kai veikejas atsijunge arba dingo AI.
+            Player* p = ObjectAccessor::FindConnectedPlayer(kv.first);
+            if (!p)
                 gone.push_back(kv.first);
-            else if (!kv.second.autopilot && (p->InBattleground() || p->InArena()))
-                banned.push_back(kv.first);
+            else if (!p->IsInWorld())
+                continue;
+            else if (!GET_PLAYERBOT_AI(p))
+                gone.push_back(kv.first);
             else if (kv.second.autopilot && p->InArena())
                 banned.push_back(kv.first);
         }
@@ -614,7 +717,7 @@ void PlayerbotRotationMgr::Update(uint32 diff)
         {
             std::string reply;
             Disable(p, reply);
-            ChatHandler(p->GetSession()).SendSysMessage("Mūšio laukuose ir arenose ši funkcija negalima.");
+            ChatHandler(p->GetSession()).SendSysMessage("Arenose autopilotas negalimas.");
             ChatHandler(p->GetSession()).SendSysMessage(reply.c_str());
         }
     }
@@ -627,13 +730,20 @@ void PlayerbotRotationMgr::Update(uint32 diff)
             auto it = _states.find(guid);
             if (it == _states.end())
                 continue;
-            if (it->second.autopilot)
-            {
+
+            bool const wasAutopilot = it->second.autopilot;
+            if (wasAutopilot)
                 _autopilotCount.fetch_sub(1, std::memory_order_relaxed);
-                // AI dingo (pvz. buvo perkurtas) – grazinam kliento valdyma, kad veikejas neliktu uzrakintas.
-                if (Player* p = ObjectAccessor::FindPlayer(guid))
-                    if (p->GetSession())
+
+            // Zaidejas dar prisijunges, bet AI dingo – grazinam kliento valdyma ir pranesam (kad priedo mygtukas nesvelptu zalias).
+            if (Player* p = ObjectAccessor::FindConnectedPlayer(guid))
+            {
+                if (p->GetSession())
+                {
+                    if (wasAutopilot)
                         p->SetClientControl(p, true);
+                    ChatHandler(p->GetSession()).SendSysMessage(wasAutopilot ? TXT_AP_OFF : TXT_OFF);
+                }
             }
             _states.erase(it);
         }
@@ -828,9 +938,10 @@ public:
         if (on)
             handler->SendSysMessage(sPlayerbotRotationMgr->Describe(player).c_str());
         handler->SendSysMessage("Kovos rotaciją (gebėjimų seką pagal klasę ir specializaciją) atlieka serveris už tave.");
-        handler->SendSysMessage("Kovą pradėk pats (automatiniu smūgiu ar pirmuoju burtu), tikslą ir vietą pasirenki pats.");
+        handler->SendSysMessage("Kovą pradėk pats (automatiniu smūgiu ar pirmuoju burtu) – rotacija įsijungia iškart, o taikinį seka tą, kurį puoli.");
+        handler->SendSysMessage("Ne kovoje AI prižiūri tave: buffai, auros, augintinis ir jo gebėjimai, gydymas, prikėlimas (nejodamas, nesėdėdamas, ne gyvūno formoje).");
         handler->SendSysMessage("|cffffff00.rotacija|r – įjungti / išjungti; |cffffff00.rotacija on judeti|r – kovoje veikėjas judės pats.");
-        handler->SendSysMessage("Pakeitus talentus rotaciją išjunk ir vėl įjunk. Mūšio laukuose ir arenose ji negalima.");
+        handler->SendSysMessage("Pakeitus talentus rotaciją išjunk ir vėl įjunk. Veikia ir mūšio laukuose bei arenose (kovą pradeda pats žaidėjas).");
         return true;
     }
 };
@@ -840,3 +951,56 @@ void AddPlayerbotRotationScripts()
     new PlayerbotRotationWorldScript();
     new PlayerbotRotationCommandScript();
 }
+
+// ---------------------------------------------------------------- kritimo zalos apsauga
+// Kritimo zala skaiciuojama tik is kliento nusileidimo paketo (Player::HandleFall) pagal aukscio skirtuma. Autopilotas veikeja kartais
+// perkelia per kliutis (urvai, tiesiai per uolas) ir jis nukrenta is didelio aukscio. Kritimo metu ijungiam laikina „God“ (HandleFall
+// ji praleidzia), nusileidus – isjungiam. Autopilotui isjungus – dar 8 s apsauga (veikejas gali buti ore).
+
+namespace
+{
+    std::mutex g_fallLock;
+    std::unordered_map<ObjectGuid, uint32> g_fallMarked;      // veikejas -> kada ijungta mūsų „God“
+    std::unordered_map<ObjectGuid, uint32> g_fallRecent;      // veikejas -> kada paskutini karta matytas kaip autopilotas
+    std::atomic<uint32> g_fallActive{ 0 };                    // greita patikra, ar apskritai yra ka tvarkyti
+}
+
+void NovaFallGuard(Player* player)
+{
+    if (!player)
+        return;
+
+    bool const ap = NovaIsAutopilot(player);
+    if (!ap && g_fallActive.load(std::memory_order_relaxed) == 0)
+        return;
+
+    uint32 const now = getMSTime();
+    std::lock_guard<std::mutex> guard(g_fallLock);
+    ObjectGuid const guid = player->GetGUID();
+    if (ap)
+    {
+        g_fallRecent[guid] = now;
+        g_fallActive.store(1, std::memory_order_relaxed);
+    }
+
+    auto rit = g_fallRecent.find(guid);
+    bool const protect = rit != g_fallRecent.end() && now - rit->second < 8000;
+    bool const marked = g_fallMarked.find(guid) != g_fallMarked.end();
+
+    if (protect && player->IsFalling() && !player->GetCommandStatus(CHEAT_GOD))
+    {
+        player->SetCommandStatusOn(CHEAT_GOD);
+        g_fallMarked[guid] = now;
+    }
+    else if (marked && (!player->IsFalling() || !protect))
+    {
+        player->SetCommandStatusOff(CHEAT_GOD);
+        g_fallMarked.erase(guid);
+    }
+
+    if (!protect && rit != g_fallRecent.end())
+        g_fallRecent.erase(rit);
+    if (g_fallRecent.empty() && g_fallMarked.empty())
+        g_fallActive.store(0, std::memory_order_relaxed);
+}
+

@@ -44,6 +44,34 @@ public:
     bool IsActive() override;
 };
 
+class NovaStuckTrigger : public Trigger
+{
+public:
+    NovaStuckTrigger(PlayerbotAI* botAI) : Trigger(botAI, "nova stuck", 5) {}
+    bool IsActive() override;
+};
+
+class NovaHomeTrigger : public Trigger
+{
+public:
+    NovaHomeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "nova home", 20) {}
+    bool IsActive() override;
+};
+
+class NovaGridlockTrigger : public Trigger
+{
+public:
+    NovaGridlockTrigger(PlayerbotAI* botAI) : Trigger(botAI, "nova gridlock", 30) {}
+    bool IsActive() override;
+};
+
+class NovaFlightTrigger : public Trigger
+{
+public:
+    NovaFlightTrigger(PlayerbotAI* botAI) : Trigger(botAI, "nova flight", 10) {}
+    bool IsActive() override;
+};
+
 class NovaAmmoTrigger : public Trigger
 {
 public:

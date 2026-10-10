@@ -88,3 +88,23 @@ bool NovaZoneTrigger::IsActive()
 {
     return NovaZoneNeedsMove(bot, botAI);
 }
+
+bool NovaStuckTrigger::IsActive()
+{
+    return NovaIsStuck(bot, botAI);
+}
+
+bool NovaHomeTrigger::IsActive()
+{
+    return NovaNeedsHome(bot, botAI);
+}
+
+bool NovaGridlockTrigger::IsActive()
+{
+    return NovaIsGridlocked(bot, botAI);
+}
+
+bool NovaFlightTrigger::IsActive()
+{
+    return NovaWantsFlight(bot, botAI);
+}

@@ -110,6 +110,51 @@ public:
 
 bool NovaZoneNeedsMove(Player* bot, PlayerbotAI* botAI);
 
+// Uzstrigimas: jei autopilotas ~100 s be pertraukos bando eiti, bet pasislenka <30 m (urvas, siena, duobe) – naudoja Namu akmeni
+// (arba, jei jo nera / jis ant atsigavimo, persikelia i lygiui tinkama vieta), o uzduotis, kurios taikinys buvo ten, palieka ramybeje.
+class NovaUnstuckAction : public NewRpgBaseAction
+{
+public:
+    NovaUnstuckAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova unstuck") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaIsStuck(Player* bot, PlayerbotAI* botAI);
+void NovaNoteMoveAttempt(Player* bot, float x, float y, float z);
+
+// Namai: atvykus i nauja zemyna (kita zemelapio dalis nei „namu“ vieta) nueina iki artimiausios smukles ir nusistato namus,
+// kad Namu akmuo grazintu cia, o ne i kita zemyna.
+class NovaHomeAction : public NewRpgBaseAction
+{
+public:
+    NovaHomeAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova home") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaNeedsHome(Player* bot, PlayerbotAI* botAI);
+
+// Aklavietė: jei ~6 min. nepasikeitė nei patirtis, nei pinigai, nei uzduociu eiga (veikejas vaiksto vienoje vietoje, uzduotys nebeivykdomos),
+// autopilotas ISMETA nebaigtas uzduotis ir persikelia i lygiui tinkama vieta (kaip atsitiktiniai botai).
+class NovaGridlockAction : public NewRpgBaseAction
+{
+public:
+    NovaGridlockAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova gridlock") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaIsGridlocked(Player* bot, PlayerbotAI* botAI);
+
+// Skrydziai: kai tikslas toli (>700 jardu tame paciame zemelapyje) ir skrydzio tinklas priartina, autopilotas nueina pas artima skrydzio
+// meistra, skrenda (gali buti keli persedimai) ir toliau eina pesciomis, o ne begioja per visa zemelapi.
+class NovaFlightAction : public NewRpgBaseAction
+{
+public:
+    NovaFlightAction(PlayerbotAI* botAI) : NewRpgBaseAction(botAI, "nova flight") {}
+    bool Execute(Event event) override;
+};
+
+bool NovaWantsFlight(Player* bot, PlayerbotAI* botAI);
+
 // Augalai ir ruda: veikejas su zolininkyste / kasyba, pamates netoli (iki 45 jardu) renkama augala ar gysla, nueina ir surenka
 // (standartinis „gather“ veiksmas su relevance 5 dingsta po autopilotu veiksmais, todel niekada nesuveikdavo).
 class NovaGatherAction : public NewRpgBaseAction

@@ -5,7 +5,9 @@
 
 #include "NovaAutopilotActions.h"
 
+#include <algorithm>
 #include <mutex>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -1145,7 +1147,18 @@ bool NovaQuestMobsAction::Execute(Event /*event*/)
     for (uint32 entry : entries)
     {
         CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(entry);
-        if (!ct || (ct->rank > CREATURE_ELITE_NORMAL && !canElite) || int32(ct->maxlevel) > int32(bot->GetLevel()) + 4)
+        if (!ct)
+            continue;
+
+        // draugiskas uzduociu NPC (pvz. „Kesselio begimas“: pasikalbek su vadais) – kredita duoda pokalbis, todel jo lygis / elitiskumas
+        // nesvarbus (jie danai 60 lygio) – filtruojami tik priesiski mobai
+        bool friendly = false;
+        FactionTemplateEntry const* mine = bot->GetFactionTemplateEntry();
+        FactionTemplateEntry const* theirs = sFactionTemplateStore.LookupEntry(ct->faction);
+        if (mine && theirs && !mine->IsHostileTo(*theirs) && (ct->npcflag & UNIT_NPC_FLAG_GOSSIP))
+            friendly = true;
+
+        if (!friendly && ((ct->rank > CREATURE_ELITE_NORMAL && !canElite) || int32(ct->maxlevel) > int32(bot->GetLevel()) + 4))
             continue;
         lists.push_back(&SpawnsOf(entry));
     }
@@ -1593,7 +1606,8 @@ bool NovaQuestUseAction::Execute(Event /*event*/)
         return true;
     }
 
-    if (bot->IsMounted())
+    // pokalbis / narvo ar svirties spaudimas gali vykti raitam – nenuimam uzduoties skolintos jojamosios (pvz. „Kesselio begimas“)
+    if (bot->IsMounted() && op.kind != UseOption::Talk && op.kind != UseOption::UseGo)
         bot->Dismount();
     bot->StopMoving();
     bot->SetFacingToObject(target);
@@ -2505,6 +2519,8 @@ bool NovaItemsAction::Execute(Event /*event*/)
 
 // ---------------------------------------------------------------- zonu kaita pagal lygi
 
+void NovaWantHome(Player* bot);   // zr. zemiau (uzstrigimas / namai)
+
 namespace
 {
     struct ZoneState
@@ -2610,8 +2626,696 @@ bool NovaZoneAction::Execute(Event /*event*/)
     if (bot->IsMounted())
         bot->Dismount();
 
+    NovaWantHome(bot);
     ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r čia jau per lengva tavo lygiui – keliamasi į tinkamesnę vietą.");
     sRandomPlayerbotMgr->RandomTeleportGrindForLevel(bot);
     ForceToWait(5000);
+    return true;
+}
+
+// ---------------------------------------------------------------- uzstrigimas (Namu akmuo) ir namai (smukle)
+
+namespace
+{
+    // ATSKIRAS uzraktas: NovaNoteMoveAttempt kviecia MovementAction::MoveTo, o kai kurie kvietejai (ApproachGoSpawns) jau laiko g_lock
+    std::mutex g_stuckLock;
+
+    struct StuckState
+    {
+        uint32 firstTime = 0;
+        uint32 lastCall = 0;
+        uint32 mapId = 0;
+        float fx = 0.0f, fy = 0.0f, fz = 0.0f;
+        float tx = 0.0f, ty = 0.0f, tz = 0.0f;
+        bool stuck = false;
+        uint32 lastHearth = 0;
+    };
+    std::unordered_map<ObjectGuid, StuckState> g_stuckState;
+
+    struct HomeState
+    {
+        uint32 wantUntil = 0;       // iki kada laikom, kad reikia nustatyti namus (po kelimosi i nauja vieta)
+        uint32 startedAt = 0;
+        uint32 giveUpUntil = 0;     // po nesekmes – iki kada nebeprasome
+    };
+    std::unordered_map<ObjectGuid, HomeState> g_homeState;
+
+    struct InnSpawn
+    {
+        uint16 map;
+        float x, y, z;
+        uint32 entry;
+    };
+    std::vector<InnSpawn> g_innSpawns;
+    bool g_innBuilt = false;
+
+    // Visos smukliu savininku vietos (vienas praejimas per spawn duomenis, kesuojama).
+    std::vector<InnSpawn> const& InnSpawns()
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        if (g_innBuilt)
+            return g_innSpawns;
+
+        std::unordered_set<uint32> inns;
+        for (auto const& kv : *sObjectMgr->GetCreatureTemplates())
+            if (kv.second.npcflag & UNIT_NPC_FLAG_INNKEEPER)
+                inns.insert(kv.first);
+
+        for (auto const& kv : sObjectMgr->GetAllCreatureData())
+            if (inns.count(kv.second.id1))
+                g_innSpawns.push_back({ kv.second.mapid, kv.second.posX, kv.second.posY, kv.second.posZ, kv.second.id1 });
+
+        g_innBuilt = true;
+        return g_innSpawns;
+    }
+
+    // Uzduotys, kuriu taikiniai yra netoli vietos, kurioje uzstrigom – paliekam ramybeje.
+    void MarkQuestsNear(Player* bot, PlayerbotAI* botAI, uint32 mapId, float tx, float ty)
+    {
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 const q = bot->GetQuestSlotQuestId(slot);
+            Quest const* quest = q ? sObjectMgr->GetQuestTemplate(q) : nullptr;
+            if (!quest || bot->GetQuestStatus(q) != QUEST_STATUS_INCOMPLETE)
+                continue;
+
+            bool near80 = false;
+            for (int i = 0; i < QUEST_OBJECTIVES_COUNT && !near80; ++i)
+            {
+                int32 const req = quest->RequiredNpcOrGo[i];
+                if (!req)
+                    continue;
+                if (req > 0)
+                {
+                    for (Spawn const& s : SpawnsOf(uint32(req)))
+                        if (s.map == mapId && std::hypot(s.x - tx, s.y - ty) < 80.0f)
+                        {
+                            near80 = true;
+                            break;
+                        }
+                }
+                else
+                {
+                    for (auto const& kv : sObjectMgr->GetAllGOData())
+                        if (kv.second.id == uint32(-req) && kv.second.mapid == mapId && std::hypot(kv.second.posX - tx, kv.second.posY - ty) < 80.0f)
+                        {
+                            near80 = true;
+                            break;
+                        }
+                }
+            }
+
+            if (near80)
+            {
+                botAI->lowPriorityQuest.insert(q);
+                LOG_INFO("playerbots", "Autopilotas {}: uzduotis {} paliekama ramybeje (taikinys ten, kur uzstrigom)", bot->GetName(), q);
+            }
+        }
+    }
+}
+
+void NovaNoteMoveAttempt(Player* bot, float x, float y, float z)
+{
+    if (!bot)
+        return;
+
+    uint32 const now = getMSTime();
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    StuckState& s = g_stuckState[bot->GetGUID()];
+    float const px = bot->GetPositionX();
+    float const py = bot->GetPositionY();
+    float const pz = bot->GetPositionZ();
+
+    auto restart = [&]()
+    {
+        s.firstTime = now;
+        s.fx = px;
+        s.fy = py;
+        s.fz = pz;
+        s.mapId = bot->GetMapId();
+        s.stuck = false;
+    };
+
+    if (!s.firstTime || now - s.lastCall > 25000 || s.mapId != bot->GetMapId())
+        restart();
+    s.lastCall = now;
+    s.tx = x;
+    s.ty = y;
+    s.tz = z;
+
+    if (std::hypot(px - s.fx, py - s.fy) > 30.0f || std::fabs(pz - s.fz) > 20.0f)
+    {
+        restart();
+        return;
+    }
+
+    if (!s.stuck && now - s.firstTime > 100000 && bot->GetExactDist(x, y, z) > 12.0f)
+    {
+        s.stuck = true;
+        LOG_INFO("playerbots", "Autopilotas {}: UZSTRIGO – 100 s be pazangos ({:.0f}, {:.0f}, {:.1f}), tikslas ({:.0f}, {:.0f}, {:.1f})",
+                 bot->GetName(), px, py, pz, x, y, z);
+    }
+}
+
+bool NovaIsStuck(Player* bot, PlayerbotAI* botAI)
+{
+    if (!NovaAutopilotFree(bot, botAI))
+        return false;
+
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    auto it = g_stuckState.find(bot->GetGUID());
+    return it != g_stuckState.end() && it->second.stuck;
+}
+
+bool NovaUnstuckAction::Execute(Event /*event*/)
+{
+    StuckState st;
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        StuckState& s = g_stuckState[bot->GetGUID()];
+        st = s;
+        s.stuck = false;
+        s.firstTime = getMSTime();
+        s.fx = bot->GetPositionX();
+        s.fy = bot->GetPositionY();
+        s.fz = bot->GetPositionZ();
+    }
+
+    MarkQuestsNear(bot, botAI, bot->GetMapId(), st.tx, st.ty);
+    NovaWantHome(bot);
+
+    uint32 const now = getMSTime();
+    Item* stone = bot->GetItemByEntry(6948);
+    if (!stone && bot->AddItem(6948, 1))
+        stone = bot->GetItemByEntry(6948);
+
+    if (stone && !bot->HasSpellCooldown(8690) && (!st.lastHearth || now - st.lastHearth > 60000))
+    {
+        if (bot->IsMounted())
+            bot->Dismount();
+        bot->StopMoving();
+        bot->GetMotionMaster()->Clear();
+
+        SpellCastResult const res = bot->CastSpell(bot, 8690, false, stone);
+        {
+            std::lock_guard<std::mutex> guard(g_stuckLock);
+            g_stuckState[bot->GetGUID()].lastHearth = now;
+        }
+        LOG_INFO("playerbots", "Autopilotas {}: uzstrigo – naudoja Namu akmeni, rezultatas {}", bot->GetName(), uint32(res));
+        ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r uzstrigau – naudoju Namu akmeni.");
+        ForceToWait(13000);
+        return true;
+    }
+
+    // akmens nera / ant atsigavimo: persikeliam i lygiui tinkama vieta
+    LOG_INFO("playerbots", "Autopilotas {}: uzstrigo, Namu akmens nepasiekiamas – keliamasi i tinkama vieta", bot->GetName());
+    ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r uzstrigau – keliuosi i kita vieta.");
+    sRandomPlayerbotMgr->RandomTeleportGrindForLevel(bot);
+    ForceToWait(4000);
+    return true;
+}
+
+void NovaWantHome(Player* bot)
+{
+    if (!bot)
+        return;
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    HomeState& h = g_homeState[bot->GetGUID()];
+    h.wantUntil = getMSTime() + 15 * 60 * 1000;
+    h.startedAt = 0;
+    h.giveUpUntil = 0;
+}
+
+bool NovaNeedsHome(Player* bot, PlayerbotAI* botAI)
+{
+    if (!NovaAutopilotFree(bot, botAI) || bot->GetGroup())
+        return false;
+
+    uint32 const now = getMSTime();
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    HomeState& h = g_homeState[bot->GetGUID()];
+    if (h.giveUpUntil && now < h.giveUpUntil)
+        return false;
+
+    // namai kitame zemelapyje (kitas zemynas) arba neseniai persikelta i nauja vieta
+    bool const wrongContinent = bot->m_homebindMapId != bot->GetMapId();
+    bool const wanted = h.wantUntil && now < h.wantUntil;
+    return wrongContinent || wanted;
+}
+
+bool NovaHomeAction::Execute(Event /*event*/)
+{
+    uint32 const now = getMSTime();
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        HomeState& h = g_homeState[bot->GetGUID()];
+        if (!h.startedAt)
+            h.startedAt = now;
+        else if (now - h.startedAt > 4 * 60 * 1000)
+        {
+            h.giveUpUntil = now + 30 * 60 * 1000;
+            h.wantUntil = 0;
+            h.startedAt = 0;
+            LOG_INFO("playerbots", "Autopilotas {}: smukles namams nepavyko rasti per 4 min., pauze 30 min.", bot->GetName());
+            return false;
+        }
+    }
+
+    // 1) smukle matoma netoliese: priejam ir nusistatom namus
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+    Unit* inn = nullptr;
+    float best = FLT_MAX;
+    for (ObjectGuid const& guid : npcs)
+    {
+        Unit* u = botAI->GetUnit(guid);
+        if (!u || !u->IsAlive() || !u->HasNpcFlag(UNIT_NPC_FLAG_INNKEEPER) || bot->IsHostileTo(u))
+            continue;
+        float const d = bot->GetDistance(u);
+        if (d < best)
+        {
+            best = d;
+            inn = u;
+        }
+    }
+
+    if (inn)
+    {
+        if (best > 8.0f)
+        {
+            MoveWorldObjectTo(inn->GetGUID(), 4.0f);
+            return true;
+        }
+
+        WorldLocation loc(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetOrientation());
+        bot->SetHomebind(loc, bot->GetAreaId());
+        {
+            std::lock_guard<std::mutex> guard(g_stuckLock);
+            HomeState& h = g_homeState[bot->GetGUID()];
+            h.wantUntil = 0;
+            h.startedAt = 0;
+        }
+        LOG_INFO("playerbots", "Autopilotas {}: namai nustatyti smukleje ({}), zona {}", bot->GetName(), inn->GetName(), bot->GetAreaId());
+        ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r namai nustatyti siame mieste.");
+        return true;
+    }
+
+    // 2) smukles nematyti: einam i artimiausia pagal spawn duomenis (tame paciame zemelapyje, ne toliau kaip 600 m)
+    InnSpawn const* nearest = nullptr;
+    float bestD = 600.0f;
+    for (InnSpawn const& s : InnSpawns())
+    {
+        if (s.map != bot->GetMapId())
+            continue;
+        float const d = bot->GetDistance2d(s.x, s.y);
+        if (d < bestD)
+        {
+            bestD = d;
+            nearest = &s;
+        }
+    }
+
+    if (!nearest)
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        HomeState& h = g_homeState[bot->GetGUID()];
+        h.giveUpUntil = now + 30 * 60 * 1000;
+        h.wantUntil = 0;
+        h.startedAt = 0;
+        return false;
+    }
+
+    return MoveFarTo(WorldPosition(nearest->map, nearest->x, nearest->y, nearest->z));
+}
+
+// ---------------------------------------------------------------- aklaviete (nebesiseka uzduociu) -> ismetam uzduotis ir keliames
+
+namespace
+{
+    struct GridState
+    {
+        uint64 sig = 0;
+        uint32 since = 0;
+        uint32 lastAction = 0;
+    };
+    std::unordered_map<ObjectGuid, GridState> g_grid;   // saugoma g_stuckLock
+
+    // Eigos parasas: patirtis, pinigai, lygis ir visu uzduociu tikslu skaitliukai. Jei nesikeicia – nieko naudingo nevyksta.
+    uint64 ProgressSignature(Player* bot)
+    {
+        uint64 s = 1469598103934665603ull;
+        auto mix = [&s](uint64 v)
+        {
+            s ^= v + 0x9e3779b97f4a7c15ull + (s << 6) + (s >> 2);
+        };
+
+        mix(bot->GetUInt32Value(PLAYER_XP));
+        mix(bot->GetLevel());
+        mix(bot->GetMoney());
+        auto const& statusMap = bot->getQuestStatusMap();
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 const q = bot->GetQuestSlotQuestId(slot);
+            if (!q)
+                continue;
+            mix(q);
+            mix(uint64(bot->GetQuestStatus(q)));
+            auto it = statusMap.find(q);
+            if (it == statusMap.end())
+                continue;
+            for (int i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+                mix(it->second.CreatureOrGOCount[i]);
+            for (int j = 0; j < QUEST_ITEM_OBJECTIVES_COUNT; ++j)
+                mix(it->second.ItemCount[j]);
+        }
+        return s;
+    }
+}
+
+bool NovaIsGridlocked(Player* bot, PlayerbotAI* botAI)
+{
+    if (!NovaAutopilotFree(bot, botAI) || bot->GetGroup())
+        return false;
+
+    uint64 const sig = ProgressSignature(bot);
+    uint32 const now = getMSTime();
+
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    GridState& g = g_grid[bot->GetGUID()];
+    if (!g.since || g.sig != sig)
+    {
+        g.sig = sig;
+        g.since = now;
+        return false;
+    }
+
+    if (now - g.since < 6 * 60 * 1000)
+        return false;
+    if (g.lastAction && now - g.lastAction < 10 * 60 * 1000)
+        return false;
+    return true;
+}
+
+bool NovaGridlockAction::Execute(Event /*event*/)
+{
+    uint32 const now = getMSTime();
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        GridState& g = g_grid[bot->GetGUID()];
+        g.lastAction = now;
+        g.since = now;
+    }
+
+    // 1) nebaigtos uzduotys ismetamos (taikiniu nepasiekiam / nebeivykdoma)
+    uint32 dropped = 0;
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+    {
+        uint32 const q = bot->GetQuestSlotQuestId(slot);
+        if (!q || bot->GetQuestStatus(q) != QUEST_STATUS_INCOMPLETE)
+            continue;
+
+        Quest const* quest = sObjectMgr->GetQuestTemplate(q);
+        bot->SetQuestSlot(slot, 0);
+        bot->TakeQuestSourceItem(q, false);
+        bot->RemoveRewardedQuest(q);
+        bot->RemoveActiveQuest(q, false);
+        botAI->lowPriorityQuest.insert(q);
+        ++dropped;
+        LOG_INFO("playerbots", "Autopilotas {}: aklaviete – uzduotis {} ({}) ismesta", bot->GetName(), q, quest ? quest->GetTitle() : "?");
+    }
+
+    // 2) persikeliam i lygiui tinkama vieta ir susikuriam namus naujoje vietoje
+    if (bot->IsMounted())
+        bot->Dismount();
+    NovaWantHome(bot);
+    ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r niekas nebesiseka, ismetu neivykdomas uzduotis ir keliuosi i tinkama vieta.");
+    LOG_INFO("playerbots", "Autopilotas {}: aklaviete – ismestos {} uzduotys, keliamasi i lygiui tinkama vieta", bot->GetName(), dropped);
+    sRandomPlayerbotMgr->RandomTeleportGrindForLevel(bot);
+    ForceToWait(5000);
+    return true;
+}
+
+// ---------------------------------------------------------------- skrydziai (skrydzio meistrai)
+
+namespace
+{
+    struct FlightPlan
+    {
+        bool valid = false;
+        uint32 plannedAt = 0;
+        uint32 lastFlight = 0;
+        uint32 fmDbGuid = 0;
+        uint32 fmEntry = 0;
+        uint16 map = 0;
+        float fx = 0.0f, fy = 0.0f, fz = 0.0f;
+        std::vector<uint32> route;                      // skrydzio taskai: [isvykimo, (tarpiniai), atvykimo]
+        std::unordered_map<uint32, uint32> badFm;       // skrydzio meistras (spawn guid) -> iki kada nebandom (nepasiekiamas)
+    };
+    std::unordered_map<ObjectGuid, FlightPlan> g_flight;   // saugoma g_stuckLock
+
+    struct FmSpawn
+    {
+        uint32 dbGuid;
+        uint32 entry;
+        uint16 map;
+        float x, y, z;
+    };
+    std::vector<FmSpawn> g_fmSpawns;
+    bool g_fmBuilt = false;
+
+    // briaunos: is -> (i, kaina). Sudaroma is TaxiPath.dbc viena karta.
+    std::unordered_map<uint32, std::vector<std::pair<uint32, uint32>>> g_taxiEdges;
+    bool g_taxiBuilt = false;
+
+    // Kviesti TURINT g_stuckLock.
+    std::vector<FmSpawn> const& FlightMasterSpawnsLocked()
+    {
+        if (g_fmBuilt)
+            return g_fmSpawns;
+
+        std::unordered_set<uint32> fms;
+        for (auto const& kv : *sObjectMgr->GetCreatureTemplates())
+            if (kv.second.npcflag & UNIT_NPC_FLAG_FLIGHTMASTER)
+                fms.insert(kv.first);
+        for (auto const& kv : sObjectMgr->GetAllCreatureData())
+            if (fms.count(kv.second.id1))
+                g_fmSpawns.push_back({ uint32(kv.first), kv.second.id1, kv.second.mapid, kv.second.posX, kv.second.posY, kv.second.posZ });
+        g_fmBuilt = true;
+        return g_fmSpawns;
+    }
+
+    void BuildTaxiEdgesLocked()
+    {
+        if (g_taxiBuilt)
+            return;
+        for (uint32 i = 0; i < sTaxiPathStore.GetNumRows(); ++i)
+            if (TaxiPathEntry const* e = sTaxiPathStore.LookupEntry(i))
+                g_taxiEdges[e->from].push_back({ e->to, e->price });
+        g_taxiBuilt = true;
+    }
+
+    // Ar skrydzio taska siam veikejui galima naudoti: tame paciame zemelapyje, su savo frakcijos skrydzio vieta.
+    bool NodeUsable(Player* bot, TaxiNodesEntry const* node)
+    {
+        return node && node->map_id == bot->GetMapId() && node->MountCreatureID[bot->GetTeamId() == TEAM_ALLIANCE ? 1 : 0];
+    }
+
+    // Pigiausias (Dijkstra) marsrutas is `from` iki taško, kuris yra arciausiai tikslo (gx, gy) ir arčiau nei limitRemain;
+    // tilpti i pinigus. Kviesti TURINT g_stuckLock.
+    bool PlanFlightRouteLocked(Player* bot, uint32 from, float gx, float gy, float limitRemain, std::vector<uint32>& route)
+    {
+        BuildTaxiEdgesLocked();
+        TaxiNodesEntry const* src = sTaxiNodesStore.LookupEntry(from);
+        if (!NodeUsable(bot, src))
+            return false;
+
+        uint32 const money = bot->GetMoney();
+        std::unordered_map<uint32, uint32> dist;
+        std::unordered_map<uint32, uint32> prev;
+        using Item = std::pair<uint32, uint32>;     // (kaina, taskas)
+        std::priority_queue<Item, std::vector<Item>, std::greater<Item>> q;
+        dist[from] = 0;
+        q.push({ 0, from });
+        while (!q.empty())
+        {
+            auto [d, u] = q.top();
+            q.pop();
+            if (d != dist[u])
+                continue;
+            auto eit = g_taxiEdges.find(u);
+            if (eit == g_taxiEdges.end())
+                continue;
+            for (auto const& [v, price] : eit->second)
+            {
+                if (d + price > money || !NodeUsable(bot, sTaxiNodesStore.LookupEntry(v)))
+                    continue;
+                auto dit = dist.find(v);
+                if (dit == dist.end() || d + price < dit->second)
+                {
+                    dist[v] = d + price;
+                    prev[v] = u;
+                    q.push({ d + price, v });
+                }
+            }
+        }
+
+        uint32 best = 0;
+        float bestRemain = limitRemain;
+        for (auto const& [node, d] : dist)
+        {
+            if (node == from)
+                continue;
+            TaxiNodesEntry const* n = sTaxiNodesStore.LookupEntry(node);
+            float const remain = std::hypot(n->x - gx, n->y - gy);
+            if (remain < bestRemain)
+            {
+                bestRemain = remain;
+                best = node;
+            }
+        }
+        if (!best)
+            return false;
+
+        route.clear();
+        for (uint32 cur = best; cur != from; cur = prev[cur])
+            route.push_back(cur);
+        route.push_back(from);
+        std::reverse(route.begin(), route.end());
+        return route.size() >= 2;
+    }
+}
+
+bool NovaWantsFlight(Player* bot, PlayerbotAI* botAI)
+{
+    if (!NovaAutopilotFree(bot, botAI) || bot->GetGroup())
+        return false;
+
+    uint32 const now = getMSTime();
+
+    // 1) priejus prie skrydzio meistro – isimenam skrydzio taska (kaip tikram zaidejui pasikalbejus su juo)
+    GuidVector npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+    for (ObjectGuid const& guid : npcs)
+    {
+        Unit* u = botAI->GetUnit(guid);
+        if (!u || !u->IsAlive() || !(u->GetUInt32Value(UNIT_NPC_FLAGS) & UNIT_NPC_FLAG_FLIGHTMASTER) || bot->IsHostileTo(u) ||
+            bot->GetDistance(u) > 40.0f)
+            continue;
+        uint32 const node = sObjectMgr->GetNearestTaxiNode(u->GetPositionX(), u->GetPositionY(), u->GetPositionZ(), u->GetMapId(), bot->GetTeamId());
+        if (node && !bot->m_taxi.IsTaximaskNodeKnown(node) && bot->m_taxi.SetTaximaskNode(node))
+            ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r atradau naują skrydžio tašką.");
+    }
+
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    FlightPlan& fp = g_flight[bot->GetGUID()];
+    if (fp.valid)
+    {
+        if (now - fp.plannedAt <= 4 * 60 * 1000)
+            return true;        // vykdomas
+
+        // per ilgai nepavyko – laikom skrydzio meistra nepasiekiamu 30 min.
+        fp.valid = false;
+        fp.badFm[fp.fmDbGuid] = now + 30 * 60 * 1000;
+        fp.lastFlight = now;
+        LOG_INFO("playerbots", "Autopilotas {}: nepavyko nueiti iki skrydzio meistro – atsisakom plano", bot->GetName());
+        return false;
+    }
+    if (fp.lastFlight && now - fp.lastFlight < 45 * 1000)
+        return false;
+
+    // 2) tikslas: paskutinis autopiloto judejimo tikslas (NovaNoteMoveAttempt), ne senesnis nei 25 s
+    auto sit = g_stuckState.find(bot->GetGUID());
+    if (sit == g_stuckState.end() || !sit->second.lastCall || now - sit->second.lastCall > 25000 || sit->second.mapId != bot->GetMapId())
+        return false;
+    float const gx = sit->second.tx, gy = sit->second.ty;
+    float const direct = bot->GetDistance2d(gx, gy);
+    if (direct < 700.0f)
+        return false;
+
+    // 3) artimiausi skrydzio meistrai (<= 350 jardu), draugiski – bandom nuo artimiausio
+    std::vector<std::pair<float, FmSpawn const*>> cands;
+    for (FmSpawn const& s : FlightMasterSpawnsLocked())
+    {
+        if (s.map != bot->GetMapId())
+            continue;
+        float const d = bot->GetDistance2d(s.x, s.y);
+        if (d > 350.0f)
+            continue;
+        auto bad = fp.badFm.find(s.dbGuid);
+        if (bad != fp.badFm.end() && bad->second > now)
+            continue;
+        CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(s.entry);
+        FactionTemplateEntry const* ft = ct ? sFactionTemplateStore.LookupEntry(ct->faction) : nullptr;
+        if (!ft || (ft->hostileMask & (bot->GetTeamId() == TEAM_ALLIANCE ? 2u : 4u)))
+            continue;
+        cands.push_back({ d, &s });
+    }
+    std::sort(cands.begin(), cands.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+
+    for (size_t i = 0; i < cands.size() && i < 4; ++i)
+    {
+        FmSpawn const* fm = cands[i].second;
+        uint32 const fromNode = sObjectMgr->GetNearestTaxiNode(fm->x, fm->y, fm->z, fm->map, bot->GetTeamId());
+        if (!fromNode)
+            continue;
+
+        // kelione privalo sutaupyti bent 300 jardu, skaiciuojant ir ejima iki skrydzio meistro
+        float const limit = std::min(direct - 400.0f, direct - 300.0f - cands[i].first);
+        std::vector<uint32> route;
+        if (limit <= 0.0f || !PlanFlightRouteLocked(bot, fromNode, gx, gy, limit, route))
+            continue;
+
+        fp.valid = true;
+        fp.plannedAt = now;
+        fp.fmDbGuid = fm->dbGuid;
+        fp.fmEntry = fm->entry;
+        fp.map = fm->map;
+        fp.fx = fm->x;
+        fp.fy = fm->y;
+        fp.fz = fm->z;
+        fp.route = route;
+        LOG_INFO("playerbots", "Autopilotas {}: planuoja skrydi {} -> {} ({} taskai, tikslas {:.0f} jardu, skrydzio meistras {:.0f} jardu)",
+                 bot->GetName(), route.front(), route.back(), route.size(), direct, cands[i].first);
+        return true;
+    }
+    return false;
+}
+
+bool NovaFlightAction::Execute(Event /*event*/)
+{
+    FlightPlan fp;
+    {
+        std::lock_guard<std::mutex> guard(g_stuckLock);
+        auto it = g_flight.find(bot->GetGUID());
+        if (it == g_flight.end() || !it->second.valid)
+            return false;
+        fp = it->second;
+    }
+
+    Creature* fm = ObjectAccessor::GetSpawnedCreatureByDBGUID(fp.map, fp.fmDbGuid);
+    if (fm && !fm->IsAlive())
+        fm = nullptr;
+
+    if (!fm || bot->GetDistance(fm) > INTERACTION_DISTANCE)
+    {
+        // einam pas skrydzio meistra (arba jo vieta, kol jis dar nepakrautas)
+        MoveFarTo(fm ? WorldPosition(fm) : WorldPosition(fp.map, fp.fx, fp.fy, fp.fz));
+        return true;    // true – kad zemesnio prioriteto veiksmai nepertrauktu ejimo
+    }
+
+    if (!bot->m_taxi.IsTaximaskNodeKnown(fp.route.front()))
+        bot->m_taxi.SetTaximaskNode(fp.route.front());
+
+    botAI->RemoveShapeshift();
+    if (bot->IsMounted())
+        bot->Dismount();
+
+    bool const ok = bot->ActivateTaxiPathTo(fp.route, fm, 0);
+    LOG_INFO("playerbots", "Autopilotas {}: skrydis {} -> {} ({})", bot->GetName(), fp.route.front(), fp.route.back(), ok ? "pavyko" : "NEPAVYKO");
+    if (ok)
+        ChatHandler(bot->GetSession()).SendSysMessage("|cff00ff00Autopilotas:|r tikslas toli – skrendu skrydžio keliu.");
+
+    std::lock_guard<std::mutex> guard(g_stuckLock);
+    FlightPlan& ref = g_flight[bot->GetGUID()];
+    ref.valid = false;
+    ref.lastFlight = getMSTime();
     return true;
 }

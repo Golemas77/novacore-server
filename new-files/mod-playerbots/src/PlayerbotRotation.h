@@ -4,12 +4,14 @@
  * 1) `.rotacija` – kaip Retail „vieno mygtuko asistentas“: zaidejas pats pradeda kova (automatinis smugis ar pirmas burtas), o
  *    gebejimu seka (rotacija) toliau vykdoma automatiskai. Naudojamas jau esantis playerbots „self“ AI (ta pati logika,
  *    kuria juda botai pagal klase ir specializacija), bet apribotas:
- *      - ne kovos ir mirties variklis ISVALYTAS (nesikalba, nerenka grobio, nepriima kvietimu, nesėda ant mounto ir pan.);
+ *      - ne kovos variklyje paliekama tik klases priežiūra (buffai, auros, augintiniai, gydymas; zr. NovaRotationGuardStrategy),
+ *        mirties variklis ISVALYTAS (nesikalba, nerenka grobio, nepriima kvietimu, nesėda ant mounto ir pan.);
  *      - kovos variklyje pasalinti „chat“, „default“ (paketu reakcijos) ir „duel“;
  *      - pagal nutylėjima veikejas NEJUDA pats (judėjimo funkcijos MovementActions.cpp grazina false) – judeti ir tikslintis
  *        zaidejas turi pats. `.rotacija on judeti` leidzia ir judeti (pilnas autopilotas kovoje);
  *      - kovos varikli perjungia PreAction pagal tikra kovos busena, o taikini parenka automatiskai.
- *    Musio laukuose ir arenose rotacija draudziama (automatiskai isjungiama).
+ *    Veikia ir musio laukuose bei arenose (BG / arenos strategijos pasalinamos, AI niekur pats nebėga); kovos varikli AI
+ *    ijungia is karto, kai zaidejas pradeda kova (automatinis smugis ar burtas i prieso taikini), nelaukdamas kovos zymos.
  *
  * 2) `.autopilotas` – VISAS „playerbot“ veikejui (kaip random botas): kelia lygi (kovos + uzduotys + grind), renka profesiju
  *    medziagas, parduoda daiktus pas pardavejus, deda brangesnius i aukciona ir perka is aukciono pagerinimus, jungiasi i musio
@@ -73,6 +75,8 @@ private:
     {
         bool allowMove = false;
         bool autopilot = false;
+        bool inBg = false;          // paskutinė žinoma būsena: mūšio lauke / arenoje (pasikeitus perkraunamos strategijos)
+        ObjectGuid lastChoice;      // paskutinis žaidėjo pasirinktas taikinys (auto smūgis / pažymėtas), kad AI jį sektų
     };
 
     void ApplyAutopilot(PlayerbotAI* botAI, Player* bot);
@@ -92,6 +96,9 @@ bool NovaRotationBlocksMovement(PlayerbotAI* botAI);
 
 // Ar sis veikejas yra zaidejo pilnas autopilotas (greita patikra: kol niekas nejungė – tik vienas atominis skaitiklis).
 bool NovaIsAutopilot(Player* bot);
+
+// Kritimo zalos apsauga autopiloto veikejui (kvieciama kiekviena zaidejo atnaujinima – Playerbots.cpp OnPlayerAfterUpdate).
+void NovaFallGuard(Player* player);
 
 // PlayerbotFactory mokina klases burtus kaip „laikinus“ (neissaugomus DB – botai juos is naujo issimoko kiekviena karta).
 // Zaidejo autopilotui juos reikia palikti: NovaCollectTemporarySpells paima dabartini sarasa, o
