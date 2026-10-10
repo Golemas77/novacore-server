@@ -4693,3 +4693,58 @@ index 1cd97a39..6f34328b 100644
          return false;
      }
  
+diff --git a/src/strategy/warrior/ArmsWarriorStrategy.cpp b/src/strategy/warrior/ArmsWarriorStrategy.cpp
+index 2049f034..04c2cd4d 100644
+--- a/src/strategy/warrior/ArmsWarriorStrategy.cpp
++++ b/src/strategy/warrior/ArmsWarriorStrategy.cpp
+@@ -110,10 +110,13 @@ void ArmsWarriorStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+         NextAction::array(0, new NextAction("heroic strike", ACTION_HIGH),
+                              new NextAction("slam", ACTION_HIGH + 1),
+                                 nullptr)));
+-    // triggers.push_back(new TriggerNode("medium rage available", 
+-    //      NextAction::array(0, new NextAction("slam", ACTION_HIGH + 1),
+-    //      new NextAction("thunder clap", ACTION_HIGH),
+-    //      nullptr)));
++    // Nova: rage'o neleidziame dingti – Heroic Strike jau nuo vidutines rage, Thunder Clap ir Berserker Rage atskirai.
++    triggers.push_back(new TriggerNode("medium rage available",
++        NextAction::array(0, new NextAction("heroic strike", ACTION_NORMAL + 2), nullptr)));
++    triggers.push_back(new TriggerNode("thunder clap",
++        NextAction::array(0, new NextAction("thunder clap", ACTION_HIGH + 1), nullptr)));
++    triggers.push_back(new TriggerNode("berserker rage",
++        NextAction::array(0, new NextAction("berserker rage", ACTION_HIGH + 1), nullptr)));
+     triggers.push_back(
+         new TriggerNode("bloodrage", NextAction::array(0, new NextAction("bloodrage", ACTION_HIGH + 2), nullptr)));
+     
+diff --git a/src/strategy/warrior/FuryWarriorStrategy.cpp b/src/strategy/warrior/FuryWarriorStrategy.cpp
+index 1b166775..f15bb832 100644
+--- a/src/strategy/warrior/FuryWarriorStrategy.cpp
++++ b/src/strategy/warrior/FuryWarriorStrategy.cpp
+@@ -62,10 +62,15 @@ void FuryWarriorStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+         "berserker stance", NextAction::array(0, new NextAction("berserker stance", ACTION_HIGH + 9), nullptr)));
+     triggers.push_back(new TriggerNode("battle shout",
+                                        NextAction::array(0, new NextAction("battle shout", ACTION_HIGH + 8), nullptr)));
+-    // triggers.push_back(new TriggerNode("target critical health", NextAction::array(0, new NextAction("execute",
+-    // ACTION_HIGH + 4), nullptr))); triggers.push_back(new TriggerNode("sudden death", NextAction::array(0, new
+-    // NextAction("execute", ACTION_HIGH + 4), nullptr))); triggers.push_back(new TriggerNode("hamstring",
+-    // NextAction::array(0, new NextAction("piercing howl", ACTION_HIGH + 1), nullptr)));
++    // Nova: Execute (tikslas <20 % arba Sudden Death) ir Rampage vėl įjungti – Fury be jų naudojo vos kelis burtus.
++    triggers.push_back(new TriggerNode("target critical health",
++                                       NextAction::array(0, new NextAction("execute", ACTION_HIGH + 4), nullptr)));
++    triggers.push_back(new TriggerNode("sudden death",
++                                       NextAction::array(0, new NextAction("execute", ACTION_HIGH + 4), nullptr)));
++    triggers.push_back(new TriggerNode("rampage",
++                                       NextAction::array(0, new NextAction("rampage", ACTION_HIGH + 3), nullptr)));
++    triggers.push_back(new TriggerNode("berserker rage",
++                                       NextAction::array(0, new NextAction("berserker rage", ACTION_HIGH + 1), nullptr)));
+     triggers.push_back(
+         new TriggerNode("pummel on enemy healer",
+                         NextAction::array(0, new NextAction("pummel on enemy healer", ACTION_INTERRUPT), nullptr)));
+@@ -84,7 +89,7 @@ void FuryWarriorStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+     triggers.push_back(
+         new TriggerNode("bloodrage", NextAction::array(0, new NextAction("bloodrage", ACTION_HIGH + 2), nullptr)));
+     triggers.push_back(new TriggerNode("medium rage available",
+-                                       NextAction::array(0, new NextAction("heroic strike", ACTION_DEFAULT + 0.1f), NULL)));
++                                       NextAction::array(0, new NextAction("heroic strike", ACTION_NORMAL + 3), NULL)));
+     // triggers.push_back(new TriggerNode("berserker rage", NextAction::array(0, new NextAction("berserker rage",
+     // ACTION_HIGH + 2), nullptr))); triggers.push_back(new TriggerNode("light aoe", NextAction::array(0,
+     //     new NextAction("whirlwind", ACTION_HIGH + 2),
